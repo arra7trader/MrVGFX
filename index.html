@@ -19,13 +19,11 @@
             --bg-secondary: #15151c;
             --bg-card: #1a1a24;
             --border-color: rgba(255, 255, 255, 0.08);
-
             --accent: #6366f1;
             --bid-color: #22c55e;
             --bid-bg: rgba(34, 197, 94, 0.25);
             --ask-color: #ef4444;
             --ask-bg: rgba(239, 68, 68, 0.25);
-
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
             --text-muted: #64748b;
@@ -66,6 +64,28 @@
             color: var(--accent);
         }
 
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .settings-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .settings-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+
         .status {
             display: flex;
             align-items: center;
@@ -99,6 +119,101 @@
             }
         }
 
+        /* Settings Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            width: 90%;
+            max-width: 450px;
+        }
+
+        .modal h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .modal-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .modal-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .modal-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: -12px;
+            margin-bottom: 16px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .modal-btn.cancel {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+        }
+
+        .modal-btn.save {
+            background: var(--accent);
+            color: white;
+        }
+
+        .modal-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Tabs */
         .tabs {
             display: flex;
             gap: 0;
@@ -342,9 +457,12 @@
     <div class="app">
         <header class="header">
             <div class="price-display" id="mainPrice">--</div>
-            <div class="status">
-                <span class="status-dot" id="statusDot"></span>
-                <span id="statusText">Connecting...</span>
+            <div class="header-right">
+                <div class="status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Connecting...</span>
+                </div>
+                <button class="settings-btn" onclick="showSettings()">⚙️ Settings</button>
             </div>
         </header>
 
@@ -388,9 +506,40 @@
         </footer>
     </div>
 
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <h2>⚙️ Connection Settings</h2>
+
+            <label class="modal-label">WebSocket URL</label>
+            <input type="text" class="modal-input" id="wsUrlInput" placeholder="wss://your-ngrok-url.ngrok-free.app">
+            <p class="modal-hint">
+                Gunakan <code>ws://localhost:8776</code> untuk lokal, atau URL ngrok untuk remote.
+            </p>
+
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="hideSettings()">Cancel</button>
+                <button class="modal-btn save" onclick="saveSettings()">Connect</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // ============================================================================
+        // CONFIGURATION
+        // ============================================================================
+        const DEFAULT_WS_URL = 'ws://localhost:8776';
+
+        function getWsUrl() {
+            return localStorage.getItem('mrvgfx_ws_url') || DEFAULT_WS_URL;
+        }
+
+        function setWsUrl(url) {
+            localStorage.setItem('mrvgfx_ws_url', url);
+        }
+
         const CONFIG = {
-            wsUrl: 'ws://localhost:8776',
+            get wsUrl() { return getWsUrl(); },
             reconnectDelay: 3000,
             maxReconnectAttempts: 10
         };
@@ -412,27 +561,83 @@
             bidPrice: document.getElementById('bidPrice'),
             askPrice: document.getElementById('askPrice'),
             spreadValue: document.getElementById('spreadValue'),
-            domContainer: document.getElementById('domContainer')
+            domContainer: document.getElementById('domContainer'),
+            settingsModal: document.getElementById('settingsModal'),
+            wsUrlInput: document.getElementById('wsUrlInput')
         };
 
+        // ============================================================================
+        // SETTINGS MODAL
+        // ============================================================================
+        function showSettings() {
+            elements.wsUrlInput.value = getWsUrl();
+            elements.settingsModal.classList.add('show');
+        }
+
+        function hideSettings() {
+            elements.settingsModal.classList.remove('show');
+        }
+
+        function saveSettings() {
+            let url = elements.wsUrlInput.value.trim();
+
+            // Auto-convert http to ws
+            if (url.startsWith('https://')) {
+                url = url.replace('https://', 'wss://');
+            } else if (url.startsWith('http://')) {
+                url = url.replace('http://', 'ws://');
+            }
+
+            // Add ws:// if no protocol
+            if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+                url = 'wss://' + url;
+            }
+
+            setWsUrl(url);
+            hideSettings();
+
+            // Reconnect with new URL
+            if (state.ws) {
+                state.ws.close();
+            }
+            state.reconnectAttempts = 0;
+            connectWebSocket();
+        }
+
+        // ============================================================================
+        // WEBSOCKET
+        // ============================================================================
         function connectWebSocket() {
             updateStatus('connecting');
-            state.ws = new WebSocket(CONFIG.wsUrl);
 
-            state.ws.onopen = () => {
-                state.connected = true;
-                state.reconnectAttempts = 0;
-                updateStatus('connected');
-            };
+            const wsUrl = CONFIG.wsUrl;
+            console.log('Connecting to:', wsUrl);
 
-            state.ws.onclose = () => {
-                state.connected = false;
-                updateStatus('disconnected');
-                scheduleReconnect();
-            };
+            try {
+                state.ws = new WebSocket(wsUrl);
 
-            state.ws.onerror = () => updateStatus('error');
-            state.ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+                state.ws.onopen = () => {
+                    state.connected = true;
+                    state.reconnectAttempts = 0;
+                    updateStatus('connected');
+                };
+
+                state.ws.onclose = () => {
+                    state.connected = false;
+                    updateStatus('disconnected');
+                    scheduleReconnect();
+                };
+
+                state.ws.onerror = (e) => {
+                    console.error('WebSocket error:', e);
+                    updateStatus('error');
+                };
+
+                state.ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+            } catch (e) {
+                console.error('Failed to create WebSocket:', e);
+                updateStatus('error');
+            }
         }
 
         function scheduleReconnect() {
@@ -454,7 +659,9 @@
                     break;
                 case 'disconnected': elements.statusText.textContent = 'Reconnecting...'; break;
                 case 'error':
-                case 'failed': elements.statusText.textContent = 'Connection Error'; break;
+                case 'failed':
+                    elements.statusText.textContent = 'Connection Error - Check Settings';
+                    break;
             }
         }
 
@@ -535,6 +742,9 @@
             });
         }
 
+        // ============================================================================
+        // INIT
+        // ============================================================================
         connectWebSocket();
     </script>
 </body>
