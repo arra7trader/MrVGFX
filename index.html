@@ -437,6 +437,98 @@
             }
         }
 
+        /* Analysis Panel */
+        .analysis-panel {
+            padding: 12px 20px;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 1fr;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .analysis-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .analysis-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+        }
+
+        .analysis-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        /* Imbalance Bar */
+        .imbalance-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .imbalance-bar-bg {
+            height: 8px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .imbalance-fill.bid {
+            background: var(--bid-color);
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        .imbalance-fill.ask {
+            background: var(--ask-color);
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        .imbalance-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .prediction-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .prediction-badge.bullish {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--bid-color);
+        }
+
+        .prediction-badge.bearish {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--ask-color);
+        }
+
+        .prediction-badge.neutral {
+            background: rgba(148, 163, 184, 0.2);
+            color: var(--text-secondary);
+        }
+
         @media (max-width: 600px) {
             .price-ladder {
                 width: 80px;
@@ -483,6 +575,42 @@
                 <div class="info-item">
                     <div class="info-label">Ask</div>
                     <div class="info-value ask" id="askPrice">--</div>
+                </div>
+            </div>
+
+            <!-- Analysis Dashboard -->
+            <div class="analysis-panel" id="analysisPanel" style="display: none;">
+                <!-- Direction Prediction -->
+                <div class="analysis-card">
+                    <span class="analysis-label">Prediction</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="prediction-badge" id="predDir">NEUTRAL</span>
+                        <span class="analysis-label" id="predConf">0% Conf</span>
+                    </div>
+                </div>
+
+                <!-- Order Imbalance -->
+                <div class="analysis-card imbalance-container">
+                    <div class="imbalance-labels">
+                        <span style="color: var(--bid-color)" id="buyPress">50%</span>
+                        <span style="color: var(--text-muted)">Order Flow</span>
+                        <span style="color: var(--ask-color)" id="sellPress">50%</span>
+                    </div>
+                    <div class="imbalance-bar-bg">
+                        <div class="imbalance-fill bid" id="barBid" style="width: 50%"></div>
+                        <div class="imbalance-fill ask" id="barAsk" style="width: 50%"></div>
+                    </div>
+                </div>
+
+                <!-- Strongest Level -->
+                <div class="analysis-card">
+                    <span class="analysis-label">Strongest Level</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="analysis-value" id="strongPrice">--</span>
+                        <span
+                            style="font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 5px; border-radius: 3px;"
+                            id="strongVol">--</span>
+                    </div>
                 </div>
             </div>
 
@@ -563,7 +691,17 @@
             spreadValue: document.getElementById('spreadValue'),
             domContainer: document.getElementById('domContainer'),
             settingsModal: document.getElementById('settingsModal'),
-            wsUrlInput: document.getElementById('wsUrlInput')
+            wsUrlInput: document.getElementById('wsUrlInput'),
+            // Analysis Elements
+            analysisPanel: document.getElementById('analysisPanel'),
+            predDir: document.getElementById('predDir'),
+            predConf: document.getElementById('predConf'),
+            buyPress: document.getElementById('buyPress'),
+            sellPress: document.getElementById('sellPress'),
+            barBid: document.getElementById('barBid'),
+            barAsk: document.getElementById('barAsk'),
+            strongPrice: document.getElementById('strongPrice'),
+            strongVol: document.getElementById('strongVol')
         };
 
         // ============================================================================
@@ -707,6 +845,27 @@
             elements.bidPrice.textContent = formatPrice(data.bid, data.digits);
             elements.askPrice.textContent = formatPrice(data.ask, data.digits);
             elements.spreadValue.textContent = `${data.spread_pips} pips`;
+
+            // Update Analysis Panel
+            if (data.analysis) {
+                elements.analysisPanel.style.display = 'grid';
+
+                // Prediction
+                elements.predDir.textContent = data.analysis.direction;
+                elements.predDir.className = `prediction-badge ${data.analysis.direction.toLowerCase()}`;
+                elements.predConf.textContent = `${data.analysis.confidence}% Conf`;
+
+                // Imbalance
+                elements.buyPress.textContent = `${data.analysis.buy_pressure}%`;
+                elements.sellPress.textContent = `${data.analysis.sell_pressure}%`;
+                elements.barBid.style.width = `${data.analysis.buy_pressure}%`;
+                elements.barAsk.style.width = `${data.analysis.sell_pressure}%`;
+
+                // Strongest Level
+                elements.strongPrice.textContent = formatPrice(data.analysis.strongest_price, data.digits);
+                elements.strongVol.textContent = `${data.analysis.strongest_volume} Lots`;
+                elements.strongVol.style.color = data.analysis.strongest_side === 'BID' ? 'var(--bid-color)' : 'var(--ask-color)';
+            }
 
             const asks = data.asks.slice().reverse();
             const bids = data.bids;

@@ -323,6 +323,35 @@ class SimulatedDOMGenerator:
         all_volumes = [a['volume'] for a in asks] + [b['volume'] for b in bids]
         max_volume = max(all_volumes) if all_volumes else 1
         
+        # ========================================================================
+        # ORDER FLOW ANALYSIS
+        # ========================================================================
+        
+        # Calculate total volumes
+        total_bid_volume = sum(b['volume'] for b in bids)
+        total_ask_volume = sum(a['volume'] for a in asks)
+        total_volume = total_bid_volume + total_ask_volume
+        
+        # Order Imbalance (Buy vs Sell pressure)
+        buy_pressure = round((total_bid_volume / total_volume) * 100, 1) if total_volume > 0 else 50
+        sell_pressure = round((total_ask_volume / total_volume) * 100, 1) if total_volume > 0 else 50
+        
+        # Price Direction Prediction
+        imbalance = buy_pressure - sell_pressure
+        if imbalance > 15:
+            direction = "BULLISH"
+            confidence = min(95, 50 + imbalance)
+        elif imbalance < -15:
+            direction = "BEARISH"
+            confidence = min(95, 50 + abs(imbalance))
+        else:
+            direction = "NEUTRAL"
+            confidence = 50 - abs(imbalance)
+        
+        # Find Strongest Level (highest volume)
+        all_levels = [(b['price'], b['volume'], 'BID') for b in bids] + [(a['price'], a['volume'], 'ASK') for a in asks]
+        strongest_level = max(all_levels, key=lambda x: x[1]) if all_levels else (0, 0, 'NONE')
+        
         # Clean old cache entries
         current_prices = set([a['price'] for a in asks] + [b['price'] for b in bids])
         old_prices = set(cache.keys()) - current_prices
@@ -341,7 +370,19 @@ class SimulatedDOMGenerator:
             'bids': bids,
             'max_volume': round(max_volume, 2),
             'digits': digits,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            # Order Flow Analysis
+            'analysis': {
+                'buy_pressure': buy_pressure,
+                'sell_pressure': sell_pressure,
+                'direction': direction,
+                'confidence': round(confidence, 1),
+                'strongest_price': strongest_level[0],
+                'strongest_volume': round(strongest_level[1], 2),
+                'strongest_side': strongest_level[2],
+                'total_bid_volume': round(total_bid_volume, 2),
+                'total_ask_volume': round(total_ask_volume, 2)
+            }
         }
 
 
