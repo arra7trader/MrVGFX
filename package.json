@@ -1,0 +1,8 @@
+{
+    "name": "mrvgfx",
+    "version": "1.0.0",
+    "description": "MT5 Real-Time DOM Visualization",
+    "dependencies": {
+        "@libsql/client": "^0.5.0"
+    }
+}
