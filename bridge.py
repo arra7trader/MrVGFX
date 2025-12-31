@@ -24,6 +24,14 @@ import MetaTrader5 as mt5
 import websockets
 from websockets.server import WebSocketServerProtocol
 
+# Import database module
+try:
+    from db import db, init_database
+    DB_ENABLED = True
+except ImportError:
+    DB_ENABLED = False
+    print("⚠️  Database module not found. Running without persistence.")
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -458,7 +466,20 @@ class DOMServer:
         self.symbol_manager.fetch_visible_symbols()
         self.running = True
         
+        # Initialize database
+        if DB_ENABLED:
+            logger.info("Initializing Turso database...")
+            if init_database():
+                logger.info("✅ Database connected and initialized")
+            else:
+                logger.warning("⚠️ Database initialization failed - running without persistence")
+        
         broadcast_task = asyncio.create_task(self.broadcast_loop())
+        
+        # Start price snapshot task if DB is enabled
+        snapshot_task = None
+        if DB_ENABLED:
+            snapshot_task = asyncio.create_task(self.price_snapshot_loop())
         
         logger.info(f"Starting WebSocket server on ws://{WEBSOCKET_HOST}:{WEBSOCKET_PORT}")
         
@@ -478,11 +499,32 @@ class DOMServer:
         finally:
             self.running = False
             broadcast_task.cancel()
+            if snapshot_task:
+                snapshot_task.cancel()
             try:
                 await broadcast_task
+                if snapshot_task:
+                    await snapshot_task
             except asyncio.CancelledError:
                 pass
             self.shutdown_mt5()
+    
+    async def price_snapshot_loop(self) -> None:
+        """Periodically save price snapshots to database."""
+        from db import db, PRICE_SNAPSHOT_INTERVAL
+        
+        while self.running:
+            for mt5_symbol in self.symbol_manager.get_all_mt5_symbols():
+                try:
+                    tick = mt5.symbol_info_tick(mt5_symbol)
+                    if tick and tick.bid > 0 and tick.ask > 0:
+                        display_name = self.symbol_manager.mt5_to_display.get(mt5_symbol)
+                        if display_name:
+                            db.save_price_snapshot(display_name, tick.bid, tick.ask)
+                except Exception as e:
+                    logger.debug(f"Snapshot error for {mt5_symbol}: {e}")
+            
+            await asyncio.sleep(PRICE_SNAPSHOT_INTERVAL)
 
 
 # ============================================================================
