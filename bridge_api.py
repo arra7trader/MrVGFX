@@ -66,6 +66,29 @@ class PriceFetcher:
         self.client = httpx.AsyncClient(timeout=10.0, verify=False)
         
         # Fallback prices if API fails entirely
+        self.fallback_prices = {
+            "XAUUSD": 2650.00,
+            "XAGUSD": 30.50,
+            "EURUSD": 1.0850,
+            "GBPUSD": 1.2650,
+            "USDJPY": 157.50,
+            "AUDUSD": 0.6250,
+            "USDCAD": 1.4350,
+            "NZDUSD": 0.5650,
+            "USDCHF": 0.9050,
+            "BTCUSD": 95000.00,
+            "ETHUSD": 3400.00,
+            "SOLUSD": 200.00,
+            "XRPUSD": 2.30,
+        }
+        # CoinGecko ID mapping (Restored for potential future use or consistency)
+        self.coingecko_ids = {
+            "BTCUSD": "bitcoin",
+            "ETHUSD": "ethereum",
+            "SOLUSD": "solana",
+            "XRPUSD": "ripple",
+            "XAUUSD": "paxos-gold",
+        }
 
 # ... (omitted) ...
 
