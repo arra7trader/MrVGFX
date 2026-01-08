@@ -9,13 +9,21 @@ echo   Menggunakan Binance + TwelveData API
 echo ===================================================
 echo.
 
+echo ===================================================
+echo.
+
+:: Step 0: Auto Update
+echo [0/5] Mengecek Update MrVgFx...
+git pull origin main
+echo.
+
 :: Step 1: Kill Previous Process (Fix Port Conflict)
-echo [1/4] Membersihkan proses lama...
+echo [1/5] Membersihkan proses lama...
 taskkill /F /IM python.exe /T >nul 2>&1
 timeout /t 2 >nul
 
 :: Step 2: Check Python
-echo [2/4] Mengecek Python...
+echo [2/5] Mengecek Python...
 python --version >nul 2>&1
 if errorlevel 1 (
     color 0C
@@ -32,8 +40,8 @@ if errorlevel 1 (
 )
 echo        Python OK!
 
-:: Step 2: Check/Install dependencies
-echo [2/3] Mengecek dependencies...
+:: Step 3: Check/Install dependencies
+echo [3/5] Mengecek dependencies...
 pip show httpx >nul 2>&1
 if errorlevel 1 (
     echo        Installing dependencies...
@@ -41,8 +49,8 @@ if errorlevel 1 (
 )
 echo        Dependencies OK!
 
-:: Step 3: Start Server
-echo [3/3] Menjalankan Server API...
+:: Step 4: Start Server
+echo [4/5] Menjalankan Server API...
 echo.
 echo ===================================================
 echo   SERVER BERJALAN - Jangan tutup jendela ini!
