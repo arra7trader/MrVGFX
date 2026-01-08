@@ -57,8 +57,11 @@ logger = logging.getLogger(__name__)
 # ============ PRICE FETCHER ============
 class PriceFetcher:
     def __init__(self):
+        self.prices: Dict[str, Dict] = {}
+        self.volume_cache: Dict[str, Dict[float, float]] = {}
         self.stable_support: Dict[str, Dict] = {}
         self.stable_resistance: Dict[str, Dict] = {}
+        
         # DISABLE SSL VERIFICATION (Fix for VPS SSL Errors)
         self.client = httpx.AsyncClient(timeout=10.0, verify=False)
         
