@@ -56,7 +56,7 @@ class PriceFetcher:
         self.volume_cache: Dict[str, Dict[float, float]] = {}
         self.stable_support: Dict[str, Dict] = {}
         self.stable_resistance: Dict[str, Dict] = {}
-        self.client = httpx.AsyncClient(timeout=10.0)
+        self.client = httpx.AsyncClient(timeout=5.0)  # Reduced timeout
         # Fallback prices if API fails
         self.fallback_prices = {
             "XAUUSD": 2650.00,
@@ -72,6 +72,14 @@ class PriceFetcher:
             "ETHUSD": 3400.00,
             "SOLUSD": 200.00,
             "XRPUSD": 2.30,
+        }
+        # CoinGecko ID mapping
+        self.coingecko_ids = {
+            "BTCUSD": "bitcoin",
+            "ETHUSD": "ethereum",
+            "SOLUSD": "solana",
+            "XRPUSD": "ripple",
+            "XAUUSD": "paxos-gold",  # PAXG as gold proxy
         }
         
     async def fetch_metals(self, symbol_info: dict, display_name: str):
@@ -108,8 +116,31 @@ class PriceFetcher:
         # Use fallback
         return self.fallback_prices.get(display_name)
     
+    async def fetch_coingecko(self, display_name: str):
+        """Fetch price from CoinGecko API (free, no key required, reliable)"""
+        try:
+            coin_id = self.coingecko_ids.get(display_name)
+            if not coin_id:
+                return None
+            url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+            response = await self.client.get(url)
+            data = response.json()
+            if coin_id in data and "usd" in data[coin_id]:
+                price = float(data[coin_id]["usd"])
+                logger.info(f"  {display_name}: {price} (CoinGecko)")
+                return price
+        except Exception as e:
+            logger.warning(f"  {display_name}: CoinGecko error - {e}")
+        return None
+    
     async def fetch_binance(self, symbol_info: dict, display_name: str):
-        """Fetch price from Binance API"""
+        """Fetch price from Binance API with fallback to CoinGecko"""
+        # Try CoinGecko first (more reliable)
+        price = await self.fetch_coingecko(display_name)
+        if price:
+            return price
+        
+        # Fallback to Binance
         try:
             url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol_info['symbol']}"
             response = await self.client.get(url)
@@ -120,7 +151,12 @@ class PriceFetcher:
                 return price
         except Exception as e:
             logger.warning(f"  {display_name}: Binance error - {e}")
-        return self.fallback_prices.get(display_name)
+        
+        # Final fallback
+        price = self.fallback_prices.get(display_name)
+        if price:
+            logger.info(f"  {display_name}: {price} (Fallback)")
+        return price
     
     async def fetch_all_prices(self):
         """Fetch all prices from APIs"""
