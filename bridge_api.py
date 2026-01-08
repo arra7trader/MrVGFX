@@ -57,13 +57,31 @@ logger = logging.getLogger(__name__)
 # ============ PRICE FETCHER ============
 class PriceFetcher:
     def __init__(self):
-        self.prices: Dict[str, Dict] = {}
-        self.volume_cache: Dict[str, Dict[float, float]] = {}
         self.stable_support: Dict[str, Dict] = {}
         self.stable_resistance: Dict[str, Dict] = {}
-        self.client = httpx.AsyncClient(timeout=5.0)
+        # DISABLE SSL VERIFICATION (Fix for VPS SSL Errors)
+        self.client = httpx.AsyncClient(timeout=10.0, verify=False)
         
         # Fallback prices if API fails entirely
+
+# ... (omitted) ...
+
+    async def fetch_binance(self, symbol_info: dict, display_name: str):
+        """Fetch price from Binance API"""
+        try:
+            url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol_info['symbol']}"
+            response = await self.client.get(url)
+            if response.status_code == 429:
+                logger.warning(f"  {display_name}: Binance 429 - Limiting...")
+                return None
+            data = response.json()
+            if "price" in data:
+                price = float(data["price"])
+                # logger.info(f"  {display_name}: {price} (Binance)")
+                return price
+        except Exception as e:
+            logger.warning(f"  {display_name}: Binance Error -> {e}")  # SHOW ERROR
+        return None
         self.fallback_prices = {
             "XAUUSD": 2650.00,
             "XAGUSD": 30.50,
