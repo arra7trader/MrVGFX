@@ -54,7 +54,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============ PRICE FETCHER ============
-# ============ PRICE FETCHER ============
 class PriceFetcher:
     def __init__(self):
         self.prices: Dict[str, Dict] = {}
@@ -62,8 +61,12 @@ class PriceFetcher:
         self.stable_support: Dict[str, Dict] = {}
         self.stable_resistance: Dict[str, Dict] = {}
         
+        # Add Browser-like Headers to avoid 403 Forbidden
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
         # DISABLE SSL VERIFICATION (Fix for VPS SSL Errors)
-        self.client = httpx.AsyncClient(timeout=10.0, verify=False)
+        self.client = httpx.AsyncClient(timeout=10.0, verify=False, headers=headers)
         
         # Fallback prices if API fails entirely
         self.fallback_prices = {
@@ -81,7 +84,6 @@ class PriceFetcher:
             "SOLUSD": 200.00,
             "XRPUSD": 2.30,
         }
-        # CoinGecko ID mapping (Restored for potential future use or consistency)
         self.coingecko_ids = {
             "BTCUSD": "bitcoin",
             "ETHUSD": "ethereum",
@@ -89,41 +91,39 @@ class PriceFetcher:
             "XRPUSD": "ripple",
             "XAUUSD": "paxos-gold",
         }
-
-# ... (omitted) ...
+        
+        # Alternative domains to try if main fails
+        self.binance_domains = [
+            "https://data-api.binance.vision",
+            "https://api.binance.com",
+            "https://api1.binance.com",
+            "https://api2.binance.com",
+            "https://api3.binance.com"
+        ]
 
     async def fetch_binance(self, symbol_info: dict, display_name: str):
-        """Fetch price from Binance API"""
-        try:
-            url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol_info['symbol']}"
-            response = await self.client.get(url)
-            if response.status_code == 429:
-                logger.warning(f"  {display_name}: Binance 429 - Limiting...")
-                return None
-            data = response.json()
-            if "price" in data:
-                price = float(data["price"])
-                # logger.info(f"  {display_name}: {price} (Binance)")
-                return price
-        except Exception as e:
-            logger.warning(f"  {display_name}: Binance Error -> {e}")  # SHOW ERROR
+        """Fetch price from Binance API (Try multiple domains)"""
+        for domain in self.binance_domains:
+            try:
+                url = f"{domain}/api/v3/ticker/price?symbol={symbol_info['symbol']}"
+                response = await self.client.get(url)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "price" in data:
+                        price = float(data["price"])
+                        logger.info(f"  {display_name}: {price} (Binance)")
+                        return price
+                elif response.status_code == 429:
+                    logger.warning(f"  {display_name}: Binance 429 Limit ({domain})")
+                    return None 
+                else:
+                    logger.warning(f"  {display_name}: HTTP {response.status_code} from {domain}")
+                    
+            except Exception as e:
+                logger.warning(f"  {display_name}: Error {domain} -> {e}")
         return None
-        self.fallback_prices = {
-            "XAUUSD": 2650.00,
-            "XAGUSD": 30.50,
-            "EURUSD": 1.0850,
-            "GBPUSD": 1.2650,
-            "USDJPY": 157.50,
-            "AUDUSD": 0.6250,
-            "USDCAD": 1.4350,
-            "NZDUSD": 0.5650,
-            "USDCHF": 0.9050,
-            "BTCUSD": 95000.00,
-            "ETHUSD": 3400.00,
-            "SOLUSD": 200.00,
-            "XRPUSD": 2.30,
-        }
-        
+
     async def fetch_metals(self, symbol_info: dict, display_name: str):
         """Fetch price from Metals.live API (free, no key required)"""
         try:
@@ -155,26 +155,6 @@ class PriceFetcher:
             pass
         return self.fallback_prices.get(display_name)
     
-    async def fetch_binance(self, symbol_info: dict, display_name: str):
-        """Fetch price from Binance API (Primary source for Crypto & Gold)"""
-        try:
-            url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol_info['symbol']}"
-            response = await self.client.get(url)
-            
-            if response.status_code == 429:
-                logger.warning(f"  {display_name}: Binance 429 - Limiting...")
-                return None
-                
-            data = response.json()
-            if "price" in data:
-                price = float(data["price"])
-                logger.info(f"  {display_name}: {price} (Binance)")
-                return price
-        except Exception as e:
-            # logger.warning(f"  {display_name}: Binance error - {e}")
-            pass
-        return None  # Let the loop handle fallback logic
-
     async def fetch_all_prices(self):
         """Fetch all prices from APIs"""
         current_time = datetime.now()
