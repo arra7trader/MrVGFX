@@ -65,6 +65,10 @@ echo   - Whale Alert
 echo ===================================================
 echo.
 
+:: Open Dashboard (Auto-Login)
+echo   Membuka Dashboard...
+start "" "%~dp0index.html"
+
 :: Run Python bridge_api.py (tidak perlu MT5!)
 python bridge_api.py 2>&1
 
