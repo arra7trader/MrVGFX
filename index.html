@@ -777,8 +777,22 @@
             color: var(--bid-color);
         }
 
-        /* Hide these elements in compact mode */
-        .zone-row,
+        /* Show first 4 rows inline (Entry, SL, SL Distance, TP1) */
+        .zone-row {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+            margin-right: 10px;
+            padding: 0;
+            border: none;
+        }
+
+        /* Hide extra rows: TP2, TP3 (rows 5, 6) */
+        .zone-row:nth-child(n+6) {
+            display: none !important;
+        }
+
+        /* Hide strength bar and label */
         .zone-strength-bar,
         .zone-strength-label,
         .zone-strength-fill,
