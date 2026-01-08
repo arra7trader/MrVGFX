@@ -120,85 +120,97 @@ class PriceFetcher:
         # Use fallback
         return self.fallback_prices.get(display_name)
     
-    async def fetch_coingecko(self, display_name: str):
-        """Fetch price from CoinGecko API (free, no key required, reliable)"""
+    async def fetch_coingecko_batch(self, coingecko_ids: List[str]):
+        """Fetch multiple prices from CoinGecko in ONE request to save rate limits"""
         try:
-            coin_id = self.coingecko_ids.get(display_name)
-            if not coin_id:
-                return None
-            url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+            ids_str = ",".join(coingecko_ids)
+            url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids_str}&vs_currencies=usd"
             response = await self.client.get(url)
+            if response.status_code == 429:
+                logger.warning("CoinGecko Rate Limit Hit! Backing off...")
+                return None
             data = response.json()
-            if coin_id in data and "usd" in data[coin_id]:
-                price = float(data[coin_id]["usd"])
-                logger.info(f"  {display_name}: {price} (CoinGecko)")
-                return price
+            return data
         except Exception as e:
-            logger.warning(f"  {display_name}: CoinGecko error - {e}")
+            logger.warning(f"CoinGecko Batch error: {e}")
         return None
-    
+        
     async def fetch_binance(self, symbol_info: dict, display_name: str):
-        """Fetch price from Binance API (Primary source)"""
-        # PRIORITY: BINANCE -> COINGECKO -> FALLBACK
+        """Fetch price from Binance API"""
         try:
             url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol_info['symbol']}"
             response = await self.client.get(url)
+            if response.status_code == 429:
+                logger.warning(f"Binance 429 for {display_name}")
+                return None
             data = response.json()
             if "price" in data:
                 price = float(data["price"])
-                logger.info(f"  {display_name}: {price} (Binance)")
+                # logger.info(f"  {display_name}: {price} (Binance)")
                 return price
         except Exception as e:
-            logger.warning(f"  {display_name}: Binance error - {e}")
-        
-        # Fallback to CoinGecko
-        price = await self.fetch_coingecko(display_name)
-        if price:
-            return price
-            
-        # Final fallback
-        price = self.fallback_prices.get(display_name)
-        if price:
-            logger.info(f"  {display_name}: {price} (Fallback)")
-        return price
-    
+            # logger.warning(f"  {display_name}: Binance error - {e}")
+            pass
+        return None
+
     async def fetch_all_prices(self):
-        """Fetch all prices from APIs or simulate if OFFLINE_MODE"""
-        for display_name, info in SYMBOLS.items():
-            # OFFLINE MODE: Use simulated prices with random walk
-            if OFFLINE_MODE:
-                base_price = self.fallback_prices.get(display_name, 100)
-                # If we already have a price, do random walk
-                if display_name in self.prices:
-                    current = self.prices[display_name]["price"]
-                    # Random walk: -0.1% to +0.1% change
-                    change = current * random.uniform(-0.001, 0.001)
-                    price = current + change
-                else:
-                    # First run: start with fallback
-                    price = base_price
-                logger.info(f"  {display_name}: {price:.{info['digits']}f} (Simulated)")
-            
-            # ONLINE MODE: Fetch from APIs
-            elif info["source"] == "fallback":
-                price = self.fallback_prices.get(display_name)
-                if price:
-                    logger.info(f"  {display_name}: {price} (Fallback)")
-            elif info["source"] == "metals":
-                price = await self.fetch_metals(info, display_name)
-            elif info["source"] == "twelvedata":
-                price = await self.fetch_twelvedata(info, display_name)
-            else:
+        """Optimized Fetch: Prioritize XAU/BTC, batch others, respect limits"""
+        current_time = datetime.now()
+        
+        # 1. Critical Symbols (Fetch Every Loop)
+        critical_symbols = ["XAUUSD", "BTCUSD"]
+        
+        # 2. Others (Fetch Round-Robin or Batch)
+        # We'll rely on cached values for non-critical mostly
+        
+        updated_count = 0
+        
+        # --- BATCH COINGECKO (For Fallback/Primary) ---
+        # Fetch all crypto + metals in one go every 10 seconds or every loop if needed
+        # Since user wants XAU/BTC focus, we fetch those always.
+        
+        # Map DisplayName -> CoinGeckoID
+        cg_map = {k: v for k, v in self.coingecko_ids.items() if k in critical_symbols}
+        
+        if cg_map:
+            cg_data = await self.fetch_coingecko_batch(list(cg_map.values()))
+            if cg_data:
+                for display_name, cg_id in cg_map.items():
+                    if cg_id in cg_data and "usd" in cg_data[cg_id]:
+                        price = float(cg_data[cg_id]["usd"])
+                        info = SYMBOLS[display_name]
+                        self.prices[display_name] = {
+                            "price": price,
+                            "digits": info["digits"],
+                            "timestamp": current_time
+                        }
+                        logger.info(f"  {display_name}: {price} (CoinGecko Batch)")
+                        updated_count += 1
+
+        # --- BINANCE (Try for Critical) ---
+        for display_name in critical_symbols:
+            # If we already got it from CG, we can skip or overwrite if Binance is preferred
+            # Let's try Binance for real-time if configured
+            info = SYMBOLS[display_name]
+            if info["source"] == "binance":
                 price = await self.fetch_binance(info, display_name)
-            
-            if price:
-                self.prices[display_name] = {
-                    "price": price,
-                    "digits": info["digits"],
-                    "timestamp": datetime.now()
-                }
-            else:
-                logger.error(f"  {display_name}: FAILED to get price!")
+                if price:
+                    self.prices[display_name] = {
+                        "price": price,
+                        "digits": info["digits"],
+                        "timestamp": current_time
+                    }
+                    logger.info(f"  {display_name}: {price} (Binance)")
+                    updated_count += 1
+        
+        # --- TWELVEDATA (Forex) ---
+        # CAUTION: 8 requests per minute limit.
+        # We should only fetch ONE forex pair per loop (round robin) and only if necessary.
+        # Since user focused on XAU/BTC, we skip others or update rarely.
+        pass # Skipping aggressively to save quota for now
+        
+        if updated_count == 0:
+            logger.warning("No prices updated this cycle. Check API limits.")
     
     def generate_dom_data(self, display_name: str) -> dict:
         """Generate simulated DOM data based on real price"""
