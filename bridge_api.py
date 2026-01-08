@@ -210,7 +210,23 @@ class PriceFetcher:
         pass # Skipping aggressively to save quota for now
         
         if updated_count == 0:
-            logger.warning("No prices updated this cycle. Check API limits.")
+            logger.warning("No prices updated from API. Using Fallback Values.")
+            
+        # 3. Ensure we have data for ALL symbols (Fallback Check)
+        for display_name, info in SYMBOLS.items():
+            if display_name not in self.prices:
+                # If cached price exists (from previous run), keep it. 
+                # If not, use hardcoded fallback.
+                fallback = self.fallback_prices.get(display_name)
+                if fallback:
+                    self.prices[display_name] = {
+                        "price": fallback,
+                        "digits": info["digits"],
+                        "timestamp": datetime.now()
+                    }
+                    if updated_count == 0: # Only log if we are fully relying on fallback
+                        logger.info(f"  {display_name}: {fallback} (Fallback)")
+
     
     def generate_dom_data(self, display_name: str) -> dict:
         """Generate simulated DOM data based on real price"""

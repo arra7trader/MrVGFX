@@ -9,8 +9,13 @@ echo   Menggunakan Binance + TwelveData API
 echo ===================================================
 echo.
 
-:: Step 1: Check Python
-echo [1/3] Mengecek Python...
+:: Step 1: Kill Previous Process (Fix Port Conflict)
+echo [1/4] Membersihkan proses lama...
+taskkill /F /IM python.exe /T >nul 2>&1
+timeout /t 2 >nul
+
+:: Step 2: Check Python
+echo [2/4] Mengecek Python...
 python --version >nul 2>&1
 if errorlevel 1 (
     color 0C
