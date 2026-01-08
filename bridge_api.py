@@ -18,6 +18,10 @@ from websockets.server import WebSocketServerProtocol
 WS_PORT = 8776
 UPDATE_INTERVAL = 1.0  # seconds
 
+# Set to True if API calls are failing/blocked on your network
+# Prices will simulate with random walk around fallback values
+OFFLINE_MODE = True  # <-- SET TO False TO USE REAL API
+
 # API Keys (Free tier)
 TWELVEDATA_API_KEY = "demo"  # Free demo key, or get yours at twelvedata.com
 
@@ -159,10 +163,24 @@ class PriceFetcher:
         return price
     
     async def fetch_all_prices(self):
-        """Fetch all prices from APIs"""
+        """Fetch all prices from APIs or simulate if OFFLINE_MODE"""
         for display_name, info in SYMBOLS.items():
-            if info["source"] == "fallback":
-                # Use fallback price directly (no API for this symbol)
+            # OFFLINE MODE: Use simulated prices with random walk
+            if OFFLINE_MODE:
+                base_price = self.fallback_prices.get(display_name, 100)
+                # If we already have a price, do random walk
+                if display_name in self.prices:
+                    current = self.prices[display_name]["price"]
+                    # Random walk: -0.1% to +0.1% change
+                    change = current * random.uniform(-0.001, 0.001)
+                    price = current + change
+                else:
+                    # First run: start with fallback
+                    price = base_price
+                logger.info(f"  {display_name}: {price:.{info['digits']}f} (Simulated)")
+            
+            # ONLINE MODE: Fetch from APIs
+            elif info["source"] == "fallback":
                 price = self.fallback_prices.get(display_name)
                 if price:
                     logger.info(f"  {display_name}: {price} (Fallback)")
