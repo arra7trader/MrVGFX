@@ -20,7 +20,7 @@ UPDATE_INTERVAL = 1.0  # seconds
 
 # Set to True if API calls are failing/blocked on your network
 # Prices will simulate with random walk around fallback values
-OFFLINE_MODE = True  # <-- SET TO False TO USE REAL API
+OFFLINE_MODE = False  # <-- Set to False for REAL TIME Binance Data
 
 # API Keys (Free tier)
 TWELVEDATA_API_KEY = "demo"  # Free demo key, or get yours at twelvedata.com
@@ -138,13 +138,8 @@ class PriceFetcher:
         return None
     
     async def fetch_binance(self, symbol_info: dict, display_name: str):
-        """Fetch price from Binance API with fallback to CoinGecko"""
-        # Try CoinGecko first (more reliable)
-        price = await self.fetch_coingecko(display_name)
-        if price:
-            return price
-        
-        # Fallback to Binance
+        """Fetch price from Binance API (Primary source)"""
+        # PRIORITY: BINANCE -> COINGECKO -> FALLBACK
         try:
             url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol_info['symbol']}"
             response = await self.client.get(url)
@@ -156,6 +151,11 @@ class PriceFetcher:
         except Exception as e:
             logger.warning(f"  {display_name}: Binance error - {e}")
         
+        # Fallback to CoinGecko
+        price = await self.fetch_coingecko(display_name)
+        if price:
+            return price
+            
         # Final fallback
         price = self.fallback_prices.get(display_name)
         if price:
