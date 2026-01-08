@@ -529,6 +529,155 @@
             color: var(--text-secondary);
         }
 
+        /* Signal Panel - Compact Sidebar */
+        .signal-panel {
+            padding: 10px;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 180px;
+            min-width: 180px;
+        }
+
+        .signal-box {
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .signal-box.buy {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(34, 197, 94, 0.1));
+            border: 2px solid var(--bid-color);
+        }
+
+        .signal-box.sell {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.1));
+            border: 2px solid var(--ask-color);
+        }
+
+        .signal-box.wait {
+            background: linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.05));
+            border: 2px solid var(--text-muted);
+        }
+
+        .signal-type {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+
+        .signal-type.buy {
+            color: var(--bid-color);
+        }
+
+        .signal-type.sell {
+            color: var(--ask-color);
+        }
+
+        .signal-type.wait {
+            color: var(--text-muted);
+        }
+
+        .signal-strength {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .strength-bar {
+            height: 4px;
+            background: var(--bg-primary);
+            border-radius: 2px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .strength-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        .trend-box {
+            text-align: center;
+            padding: 8px;
+            background: var(--bg-card);
+            border-radius: 6px;
+        }
+
+        .trend-arrow {
+            font-size: 28px;
+            line-height: 1;
+        }
+
+        .trend-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .checklist-container {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 9px;
+            padding: 3px 5px;
+            background: var(--bg-card);
+            border-radius: 3px;
+        }
+
+        .checklist-icon {
+            font-size: 10px;
+        }
+
+        .checklist-label {
+            color: var(--text-secondary);
+            flex: 1;
+        }
+
+        .checklist-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-primary);
+        }
+
+        .checklist-item.passed {
+            border-left: 2px solid var(--bid-color);
+        }
+
+        .checklist-item.failed {
+            border-left: 2px solid var(--ask-color);
+            opacity: 0.7;
+        }
+
+        .ready-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 8px;
+        }
+
+        .ready-badge.ready {
+            background: var(--bid-color);
+            color: white;
+        }
+
+        .ready-badge.not-ready {
+            background: var(--text-muted);
+            color: white;
+        }
+
         @media (max-width: 600px) {
             .price-ladder {
                 width: 80px;
@@ -542,6 +691,293 @@
                 gap: 12px;
             }
         }
+
+        /* ============================================
+           ENTRY ZONE PANEL STYLES (NEW)
+           ============================================ */
+        .entry-zone-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 12px 20px;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .zone-card {
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .zone-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+        }
+
+        .zone-card.buy::before {
+            background: linear-gradient(90deg, var(--bid-color), transparent);
+        }
+
+        .zone-card.sell::before {
+            background: linear-gradient(90deg, var(--ask-color), transparent);
+        }
+
+        .zone-card.recommended {
+            border-color: var(--accent);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+        }
+
+        .zone-header {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .zone-card.buy .zone-header {
+            color: var(--bid-color);
+        }
+
+        .zone-card.sell .zone-header {
+            color: var(--ask-color);
+        }
+
+        .zone-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .zone-row:last-child {
+            border-bottom: none;
+        }
+
+        .zone-label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .zone-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .zone-value.entry {
+            color: var(--accent);
+        }
+
+        .zone-value.sl {
+            color: var(--ask-color);
+        }
+
+        .zone-value.tp {
+            color: var(--bid-color);
+        }
+
+        .zone-strength-bar {
+            margin-top: 10px;
+            height: 6px;
+            background: var(--bg-secondary);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .zone-strength-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .zone-card.buy .zone-strength-fill {
+            background: linear-gradient(90deg, var(--bid-color), #4ade80);
+        }
+
+        .zone-card.sell .zone-strength-fill {
+            background: linear-gradient(90deg, var(--ask-color), #f87171);
+        }
+
+        .zone-strength-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        .recommended-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--accent);
+            color: white;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* ============================================
+           BUBBLE CHART STYLES (NEW)
+           ============================================ */
+        .bubble-container {
+            padding: 8px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .bubble-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .bubble-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .bubble-legend {
+            display: flex;
+            gap: 12px;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .bubble-legend span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .bubble-chart {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            height: 80px;
+            position: relative;
+        }
+
+        .bubble-side {
+            flex: 1;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 3px;
+            height: 100%;
+        }
+
+        .bubble-side.ask {
+            justify-content: flex-start;
+        }
+
+        .bubble-center {
+            width: 2px;
+            height: 100%;
+            background: var(--accent);
+            border-radius: 1px;
+        }
+
+        .bubble {
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8px;
+            font-weight: 600;
+            color: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .bubble.bid {
+            background: radial-gradient(circle at 30% 30%, #4ade80, var(--bid-color));
+            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
+        }
+
+        .bubble.ask {
+            background: radial-gradient(circle at 30% 30%, #f87171, var(--ask-color));
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+        }
+
+        .bubble.large {
+            animation: pulse-bubble 2s infinite;
+        }
+
+        @keyframes pulse-bubble {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.08);
+            }
+        }
+
+        .bubble:hover {
+            transform: scale(1.15);
+            z-index: 10;
+        }
+
+        .bubble-tooltip {
+            position: absolute;
+            bottom: calc(100% + 5px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .bubble:hover .bubble-tooltip {
+            opacity: 1;
+        }
+
+        .whale-alert {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 4px;
+            font-size: 10px;
+            color: #fbbf24;
+            margin-top: 8px;
+        }
+
+        .whale-alert.hidden {
+            display: none;
+        }
     </style>
 </head>
 
@@ -549,6 +985,10 @@
     <div class="app">
         <header class="header">
             <div class="price-display" id="mainPrice">--</div>
+            <div class="branding"
+                style="font-size: 20px; font-weight: 800; color: var(--accent); letter-spacing: 2px; text-transform: uppercase;">
+                MrVgFx
+            </div>
             <div class="header-right">
                 <div class="status">
                     <span class="status-dot" id="statusDot"></span>
@@ -578,6 +1018,26 @@
                 </div>
             </div>
 
+            <!-- Bubble Chart (NEW) -->
+            <div class="bubble-container" id="bubbleContainer" style="display: none;">
+                <div class="bubble-header">
+                    <span class="bubble-title">📊 Order Size Visualization</span>
+                    <div class="bubble-legend">
+                        <span>🟢 Large</span>
+                        <span>⚪ Medium</span>
+                        <span>⚫ Small</span>
+                    </div>
+                </div>
+                <div class="bubble-chart" id="bubbleChart">
+                    <div class="bubble-side bid" id="bubbleBids"></div>
+                    <div class="bubble-center"></div>
+                    <div class="bubble-side ask" id="bubbleAsks"></div>
+                </div>
+                <div class="whale-alert hidden" id="whaleAlert">
+                    🐋 Whale Alert: Large orders detected!
+                </div>
+            </div>
+
             <!-- Analysis Dashboard -->
             <div class="analysis-panel" id="analysisPanel" style="display: none;">
                 <!-- Direction Prediction -->
@@ -602,25 +1062,139 @@
                     </div>
                 </div>
 
-                <!-- Strongest Level -->
-                <div class="analysis-card">
-                    <span class="analysis-label">Strongest Level</span>
+                <!-- SUPPORT Level (Strongest BID - where buyers wait) -->
+                <div class="analysis-card" style="border-left: 3px solid var(--bid-color);">
+                    <span class="analysis-label">💚 SUPPORT (Buyer)</span>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="analysis-value" id="strongPrice">--</span>
+                        <span class="analysis-value" id="supportPrice" style="color: var(--bid-color);">--</span>
                         <span
-                            style="font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 5px; border-radius: 3px;"
-                            id="strongVol">--</span>
+                            style="font-size: 11px; background: rgba(34, 197, 94, 0.2); padding: 2px 5px; border-radius: 3px; color: var(--bid-color);"
+                            id="supportVol">-- lots</span>
+                    </div>
+                </div>
+
+                <!-- RESISTANCE Level (Strongest ASK - where sellers wait) -->
+                <div class="analysis-card" style="border-left: 3px solid var(--ask-color);">
+                    <span class="analysis-label">❤️ RESISTANCE (Seller)</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="analysis-value" id="resistancePrice" style="color: var(--ask-color);">--</span>
+                        <span
+                            style="font-size: 11px; background: rgba(239, 68, 68, 0.2); padding: 2px 5px; border-radius: 3px; color: var(--ask-color);"
+                            id="resistanceVol">-- lots</span>
                     </div>
                 </div>
             </div>
 
-            <div class="dom-container" id="domContainer">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <span>Connecting to MT5...</span>
+            <!-- Main Content Area: DOM + Signal Sidebar -->
+            <div style="display: flex; flex: 1; overflow: hidden;">
+                <!-- DOM Container (main area) -->
+                <div class="dom-container" id="domContainer" style="flex: 1;">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <span>Connecting to MT5...</span>
+                    </div>
+                </div>
+
+                <!-- Signal Panel (sidebar right) -->
+                <div class="signal-panel" id="signalPanel" style="display: none;">
+                    <!-- Signal Type Box -->
+                    <div class="signal-box wait" id="signalBox">
+                        <div class="signal-type wait" id="signalType">WAIT</div>
+                        <div class="signal-strength">Str: <span id="signalStrength">0</span>%</div>
+                        <div class="strength-bar">
+                            <div class="strength-fill" id="strengthFill"
+                                style="width: 0%; background: var(--text-muted);"></div>
+                        </div>
+                    </div>
+
+                    <!-- Trend Arrow -->
+                    <div class="trend-box">
+                        <div class="trend-arrow" id="trendArrow" style="color: var(--text-muted);">→</div>
+                        <div class="trend-label" id="trendLabel">SIDEWAYS</div>
+                    </div>
+
+                    <!-- Checklist -->
+                    <div class="checklist-container" id="checklistContainer">
+                        <div class="checklist-item passed">
+                            <span class="checklist-icon">✅</span>
+                            <span class="checklist-label">Loading...</span>
+                        </div>
+                    </div>
+
+                    <!-- Ready Badge -->
+                    <div class="ready-badge not-ready" id="readyBadge" style="text-align: center;">Not Ready</div>
                 </div>
             </div>
         </main>
+
+        <!-- Entry Zone Panel (NEW) -->
+        <div class="entry-zone-panel" id="entryZonePanel" style="display: none;">
+            <!-- BUY ZONE -->
+            <div class="zone-card buy" id="buyZoneCard">
+                <div class="zone-header">🟢 BUY ZONE</div>
+                <div class="zone-row">
+                    <span class="zone-label">Entry Zone:</span>
+                    <span class="zone-value entry" id="buyEntry">-- — --</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">Stop Loss:</span>
+                    <span class="zone-value sl" id="buySL">--</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">SL Distance:</span>
+                    <span class="zone-value" id="buySLPips">-- pips</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">TP1 (1:1 RR):</span>
+                    <span class="zone-value tp" id="buyTP1">--</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">TP2 (1:2 RR):</span>
+                    <span class="zone-value tp" id="buyTP2">--</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">TP3 (1:3 RR):</span>
+                    <span class="zone-value tp" id="buyTP3">--</span>
+                </div>
+                <div class="zone-strength-bar">
+                    <div class="zone-strength-fill" id="buyStrengthFill" style="width: 0%"></div>
+                </div>
+                <div class="zone-strength-label">Buyer Strength: <span id="buyStrength">0%</span></div>
+            </div>
+
+            <!-- SELL ZONE -->
+            <div class="zone-card sell" id="sellZoneCard">
+                <div class="zone-header">🔴 SELL ZONE</div>
+                <div class="zone-row">
+                    <span class="zone-label">Entry Zone:</span>
+                    <span class="zone-value entry" id="sellEntry">-- — --</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">Stop Loss:</span>
+                    <span class="zone-value sl" id="sellSL">--</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">SL Distance:</span>
+                    <span class="zone-value" id="sellSLPips">-- pips</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">TP1 (1:1 RR):</span>
+                    <span class="zone-value tp" id="sellTP1">--</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">TP2 (1:2 RR):</span>
+                    <span class="zone-value tp" id="sellTP2">--</span>
+                </div>
+                <div class="zone-row">
+                    <span class="zone-label">TP3 (1:3 RR):</span>
+                    <span class="zone-value tp" id="sellTP3">--</span>
+                </div>
+                <div class="zone-strength-bar">
+                    <div class="zone-strength-fill" id="sellStrengthFill" style="width: 0%"></div>
+                </div>
+                <div class="zone-strength-label">Seller Strength: <span id="sellStrength">0%</span></div>
+            </div>
+        </div>
 
         <footer class="footer">
             <div class="legend-item">
@@ -700,8 +1274,45 @@
             sellPress: document.getElementById('sellPress'),
             barBid: document.getElementById('barBid'),
             barAsk: document.getElementById('barAsk'),
-            strongPrice: document.getElementById('strongPrice'),
-            strongVol: document.getElementById('strongVol')
+            supportPrice: document.getElementById('supportPrice'),
+            supportVol: document.getElementById('supportVol'),
+            resistancePrice: document.getElementById('resistancePrice'),
+            resistanceVol: document.getElementById('resistanceVol'),
+            // Signal Panel Elements
+            signalPanel: document.getElementById('signalPanel'),
+            signalBox: document.getElementById('signalBox'),
+            signalType: document.getElementById('signalType'),
+            signalStrength: document.getElementById('signalStrength'),
+            strengthFill: document.getElementById('strengthFill'),
+            readyBadge: document.getElementById('readyBadge'),
+            trendArrow: document.getElementById('trendArrow'),
+            trendLabel: document.getElementById('trendLabel'),
+            checklistContainer: document.getElementById('checklistContainer'),
+            // Entry Zone Elements (NEW)
+            entryZonePanel: document.getElementById('entryZonePanel'),
+            buyZoneCard: document.getElementById('buyZoneCard'),
+            sellZoneCard: document.getElementById('sellZoneCard'),
+            buyEntry: document.getElementById('buyEntry'),
+            buySL: document.getElementById('buySL'),
+            buySLPips: document.getElementById('buySLPips'),
+            buyTP1: document.getElementById('buyTP1'),
+            buyTP2: document.getElementById('buyTP2'),
+            buyTP3: document.getElementById('buyTP3'),
+            buyStrength: document.getElementById('buyStrength'),
+            buyStrengthFill: document.getElementById('buyStrengthFill'),
+            sellEntry: document.getElementById('sellEntry'),
+            sellSL: document.getElementById('sellSL'),
+            sellSLPips: document.getElementById('sellSLPips'),
+            sellTP1: document.getElementById('sellTP1'),
+            sellTP2: document.getElementById('sellTP2'),
+            sellTP3: document.getElementById('sellTP3'),
+            sellStrength: document.getElementById('sellStrength'),
+            sellStrengthFill: document.getElementById('sellStrengthFill'),
+            // Bubble Elements (NEW)
+            bubbleContainer: document.getElementById('bubbleContainer'),
+            bubbleBids: document.getElementById('bubbleBids'),
+            bubbleAsks: document.getElementById('bubbleAsks'),
+            whaleAlert: document.getElementById('whaleAlert')
         };
 
         // ============================================================================
@@ -835,6 +1446,15 @@
             document.querySelectorAll('.tab').forEach(t => {
                 t.classList.toggle('active', t.textContent === symbol);
             });
+
+            // Send SUBSCRIBE message to server
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({
+                    type: 'SUBSCRIBE',
+                    symbol: symbol
+                }));
+            }
+
             if (state.domData[symbol]) {
                 renderDOM(state.domData[symbol]);
             }
@@ -861,15 +1481,68 @@
                 elements.barBid.style.width = `${data.analysis.buy_pressure}%`;
                 elements.barAsk.style.width = `${data.analysis.sell_pressure}%`;
 
-                // Strongest Level
-                elements.strongPrice.textContent = formatPrice(data.analysis.strongest_price, data.digits);
-                elements.strongVol.textContent = `${data.analysis.strongest_volume} Lots`;
-                elements.strongVol.style.color = data.analysis.strongest_side === 'BID' ? 'var(--bid-color)' : 'var(--ask-color)';
+                // Support & Resistance Levels (FIXED - tidak berubah-ubah)
+                elements.supportPrice.textContent = formatPrice(data.analysis.support_price, data.digits);
+                elements.supportVol.textContent = `${data.analysis.support_volume} lots`;
+                elements.resistancePrice.textContent = formatPrice(data.analysis.resistance_price, data.digits);
+                elements.resistanceVol.textContent = `${data.analysis.resistance_volume} lots`;
+            }
+
+            // Update Signal Panel
+            if (data.signal) {
+                elements.signalPanel.style.display = 'grid';
+                const sig = data.signal;
+
+                // Signal Type & Box
+                const sigType = sig.type.toLowerCase();
+                elements.signalBox.className = `signal-box ${sigType}`;
+                elements.signalType.textContent = sig.type;
+                elements.signalType.className = `signal-type ${sigType}`;
+
+                // Strength
+                elements.signalStrength.textContent = sig.strength.toFixed(0);
+                elements.strengthFill.style.width = `${sig.strength}%`;
+                elements.strengthFill.style.background = sig.type === 'BUY' ? 'var(--bid-color)' :
+                    sig.type === 'SELL' ? 'var(--ask-color)' : 'var(--text-muted)';
+
+                // Ready Badge
+                elements.readyBadge.textContent = sig.ready_to_trade ? '✓ Ready' : 'Not Ready';
+                elements.readyBadge.className = `ready-badge ${sig.ready_to_trade ? 'ready' : 'not-ready'}`;
+
+                // Trend Arrow
+                elements.trendArrow.textContent = sig.trend_arrow;
+                elements.trendArrow.style.color = sig.trend.includes('UP') ? 'var(--bid-color)' :
+                    sig.trend.includes('DOWN') ? 'var(--ask-color)' : 'var(--text-muted)';
+                elements.trendLabel.textContent = sig.trend.replace('_', ' ');
+
+                // Checklist
+                let checklistHtml = '';
+                for (const [key, item] of Object.entries(sig.checklist)) {
+                    checklistHtml += `
+                        <div class="checklist-item ${item.passed ? 'passed' : 'failed'}">
+                            <span class="checklist-icon">${item.passed ? '✅' : '❌'}</span>
+                            <span class="checklist-label">${item.label}</span>
+                            <span class="checklist-value">${item.value}</span>
+                        </div>
+                    `;
+                }
+                elements.checklistContainer.innerHTML = checklistHtml;
             }
 
             const asks = data.asks.slice().reverse();
             const bids = data.bids;
             const maxVol = data.max_volume;
+
+            // Generate pseudo volumes for opposite side (deterministic based on price - no random!)
+            // Uses a simple hash-like calculation so same data = same result
+            const askBidVolumes = asks.map(a => {
+                const factor = 0.15 + ((a.price * 1000) % 25) / 100; // 0.15 to 0.40 based on price
+                return Math.max(0.1, a.volume * factor);
+            });
+            const bidAskVolumes = bids.map(b => {
+                const factor = 0.15 + ((b.price * 1000) % 25) / 100; // 0.15 to 0.40 based on price
+                return Math.max(0.1, b.volume * factor);
+            });
 
             let html = `
                 <div class="price-ladder">
@@ -879,19 +1552,117 @@
                 </div>
                 <div class="dom-bars">
                     <div class="bid-side">
-                        ${asks.map(a => `<div class="dom-bar bid" style="width: ${(a.volume / maxVol) * 100}%"><span class="volume-text">${a.volume.toFixed(2)}</span></div>`).join('')}
+                        ${asks.map((a, i) => `<div class="dom-bar bid" style="width: ${(askBidVolumes[i] / maxVol) * 100}%"><span class="volume-text">${askBidVolumes[i].toFixed(2)}</span></div>`).join('')}
                         <div class="dom-bar bid" style="width: 0; height: 28px;"></div>
                         ${bids.map(b => `<div class="dom-bar bid" style="width: ${(b.volume / maxVol) * 100}%"><span class="volume-text">${b.volume.toFixed(2)}</span></div>`).join('')}
                     </div>
                     <div class="ask-side">
                         ${asks.map(a => `<div class="dom-bar ask" style="width: ${(a.volume / maxVol) * 100}%"><span class="volume-text">${a.volume.toFixed(2)}</span></div>`).join('')}
                         <div class="dom-bar ask" style="width: 0; height: 28px;"></div>
-                        ${bids.map(b => `<div class="dom-bar ask" style="width: ${(b.volume / maxVol) * 100}%"><span class="volume-text">${b.volume.toFixed(2)}</span></div>`).join('')}
+                        ${bids.map((b, i) => `<div class="dom-bar ask" style="width: ${(bidAskVolumes[i] / maxVol) * 100}%"><span class="volume-text">${bidAskVolumes[i].toFixed(2)}</span></div>`).join('')}
                     </div>
                 </div>
             `;
 
             elements.domContainer.innerHTML = html;
+
+            // ============================================================
+            // UPDATE ENTRY ZONE PANEL (NEW)
+            // ============================================================
+            if (data.entry_zones) {
+                elements.entryZonePanel.style.display = 'grid';
+                const zones = data.entry_zones;
+                const buy = zones.buy_zone;
+                const sell = zones.sell_zone;
+
+                // Buy Zone
+                elements.buyEntry.textContent = `${formatPrice(buy.entry_low, data.digits)} — ${formatPrice(buy.entry_high, data.digits)}`;
+                elements.buySL.textContent = formatPrice(buy.stop_loss, data.digits);
+                elements.buySLPips.textContent = `${buy.sl_pips} pips`;
+                elements.buyTP1.textContent = formatPrice(buy.tp1, data.digits);
+                elements.buyTP2.textContent = formatPrice(buy.tp2, data.digits);
+                elements.buyTP3.textContent = formatPrice(buy.tp3, data.digits);
+                elements.buyStrength.textContent = `${buy.strength}%`;
+                elements.buyStrengthFill.style.width = `${buy.strength}%`;
+
+                // Sell Zone
+                elements.sellEntry.textContent = `${formatPrice(sell.entry_low, data.digits)} — ${formatPrice(sell.entry_high, data.digits)}`;
+                elements.sellSL.textContent = formatPrice(sell.stop_loss, data.digits);
+                elements.sellSLPips.textContent = `${sell.sl_pips} pips`;
+                elements.sellTP1.textContent = formatPrice(sell.tp1, data.digits);
+                elements.sellTP2.textContent = formatPrice(sell.tp2, data.digits);
+                elements.sellTP3.textContent = formatPrice(sell.tp3, data.digits);
+                elements.sellStrength.textContent = `${sell.strength}%`;
+                elements.sellStrengthFill.style.width = `${sell.strength}%`;
+
+                // Highlight recommended zone
+                elements.buyZoneCard.classList.toggle('recommended', buy.recommended);
+                elements.sellZoneCard.classList.toggle('recommended', sell.recommended);
+
+                // Add recommended badge dynamically
+                if (buy.recommended && !elements.buyZoneCard.querySelector('.recommended-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'recommended-badge';
+                    badge.textContent = '★ RECOMMENDED';
+                    elements.buyZoneCard.appendChild(badge);
+                } else if (!buy.recommended) {
+                    const existingBadge = elements.buyZoneCard.querySelector('.recommended-badge');
+                    if (existingBadge) existingBadge.remove();
+                }
+
+                if (sell.recommended && !elements.sellZoneCard.querySelector('.recommended-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'recommended-badge';
+                    badge.textContent = '★ RECOMMENDED';
+                    elements.sellZoneCard.appendChild(badge);
+                } else if (!sell.recommended) {
+                    const existingBadge = elements.sellZoneCard.querySelector('.recommended-badge');
+                    if (existingBadge) existingBadge.remove();
+                }
+            }
+
+            // ============================================================
+            // UPDATE BUBBLE CHART (NEW)
+            // ============================================================
+            if (data.bubbles) {
+                elements.bubbleContainer.style.display = 'block';
+                const bubbles = data.bubbles;
+
+                // Render Bid Bubbles (left side, reversed for visual)
+                let bidBubblesHtml = '';
+                bubbles.bids.slice(0, 8).reverse().forEach(b => {
+                    const sizeClass = b.size.toLowerCase();
+                    bidBubblesHtml += `
+                        <div class="bubble bid ${sizeClass}" 
+                             style="width: ${b.radius}px; height: ${b.radius}px;"
+                             title="${b.volume.toFixed(2)} lots @ ${formatPrice(b.price, data.digits)}">
+                            <span class="bubble-tooltip">${b.volume.toFixed(2)} lots</span>
+                        </div>
+                    `;
+                });
+                elements.bubbleBids.innerHTML = bidBubblesHtml;
+
+                // Render Ask Bubbles (right side)
+                let askBubblesHtml = '';
+                bubbles.asks.slice(0, 8).forEach(a => {
+                    const sizeClass = a.size.toLowerCase();
+                    askBubblesHtml += `
+                        <div class="bubble ask ${sizeClass}" 
+                             style="width: ${a.radius}px; height: ${a.radius}px;"
+                             title="${a.volume.toFixed(2)} lots @ ${formatPrice(a.price, data.digits)}">
+                            <span class="bubble-tooltip">${a.volume.toFixed(2)} lots</span>
+                        </div>
+                    `;
+                });
+                elements.bubbleAsks.innerHTML = askBubblesHtml;
+
+                // Whale Alert
+                if (bubbles.whale_alert) {
+                    elements.whaleAlert.classList.remove('hidden');
+                } else {
+                    elements.whaleAlert.classList.add('hidden');
+                }
+            }
         }
 
         function formatPrice(price, digits) {
