@@ -693,55 +693,44 @@
         }
 
         /* ============================================
-           ENTRY ZONE PANEL STYLES (NEW)
+           ENTRY ZONE PANEL - ULTRA COMPACT STRIP
            ============================================ */
         .entry-zone-panel {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            padding: 6px 12px;
+            display: flex;
+            gap: 8px;
+            padding: 4px 12px;
             background: var(--bg-primary);
             border-top: 1px solid var(--border-color);
+            font-size: 10px;
         }
 
         .zone-card {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
             background: var(--bg-card);
-            border-radius: 6px;
-            padding: 6px 8px;
+            border-radius: 4px;
+            padding: 4px 8px;
             border: 1px solid var(--border-color);
-            position: relative;
-            overflow: hidden;
         }
 
-        .zone-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
+        .zone-card.buy {
+            border-left: 3px solid var(--bid-color);
         }
 
-        .zone-card.buy::before {
-            background: linear-gradient(90deg, var(--bid-color), transparent);
-        }
-
-        .zone-card.sell::before {
-            background: linear-gradient(90deg, var(--ask-color), transparent);
+        .zone-card.sell {
+            border-left: 3px solid var(--ask-color);
         }
 
         .zone-card.recommended {
             border-color: var(--accent);
-            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
         }
 
         .zone-header {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            white-space: nowrap;
         }
 
         .zone-card.buy .zone-header {
@@ -752,16 +741,16 @@
             color: var(--ask-color);
         }
 
-        .zone-row {
+        .zone-info {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 2px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            gap: 10px;
+            flex: 1;
         }
 
-        .zone-row:last-child {
-            border-bottom: none;
+        .zone-item {
+            display: flex;
+            gap: 3px;
+            align-items: center;
         }
 
         .zone-label {
@@ -788,46 +777,13 @@
             color: var(--bid-color);
         }
 
-        .zone-strength-bar {
-            margin-top: 4px;
-            height: 4px;
-            background: var(--bg-secondary);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .zone-strength-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 0.3s;
-        }
-
-        .zone-card.buy .zone-strength-fill {
-            background: linear-gradient(90deg, var(--bid-color), #4ade80);
-        }
-
-        .zone-card.sell .zone-strength-fill {
-            background: linear-gradient(90deg, var(--ask-color), #f87171);
-        }
-
-        .zone-strength-label {
-            font-size: 8px;
-            color: var(--text-muted);
-            margin-top: 2px;
-            text-align: center;
-        }
-
+        /* Hide these elements in compact mode */
+        .zone-row,
+        .zone-strength-bar,
+        .zone-strength-label,
+        .zone-strength-fill,
         .recommended-badge {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            font-size: 9px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background: var(--accent);
-            color: white;
-            font-weight: 700;
-            text-transform: uppercase;
+            display: none !important;
         }
 
         /* ============================================
