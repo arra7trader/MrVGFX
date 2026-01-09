@@ -1847,63 +1847,45 @@
                 const HISTORY_WIDTH = CHART_WIDTH - LAYOUT.FUTURE_WIDTH;
                 const CHART_HEIGHT = height - LAYOUT.BOTTOM_MARGIN;
 
-                // 4. Calculate Screen Transforms (Y-Axis)
-                // SMART OUTLIER REJECTION:
-                // Only consider history points that are "sane" relative to current price.
-                // This prevents "0" prices or extreme spikes from breaking the scale.
-
+                // 4. Calculate Screen Transforms (Y-Axis) - REFERENCE LOGIC
+                // "plek ketiplek" (Exact Replica) from HeatmapBubble.tsx
                 let minPrice = Infinity;
                 let maxPrice = -Infinity;
-                const currentMid = currentData.mid_price;
 
-                // Sanity Check: If current price is invalid/zero, abort comfortably
-                if (!currentMid || currentMid <= 0) return;
+                // Helper to scan book extremes
+                const scanBook = (book) => {
+                    if (book.bids && book.bids.length > 0) {
+                        minPrice = Math.min(minPrice, book.bids[book.bids.length - 1].price);
+                    }
+                    if (book.asks && book.asks.length > 0) {
+                        maxPrice = Math.max(maxPrice, book.asks[book.asks.length - 1].price);
+                    }
+                };
 
-                // 4a. Find Min/Max Mid Price in visible history (Filtered)
-                // MICRO VIEW: Only scan the last 60 points (Recent Action) for scaling
-                // This ensures the view follows the head of the chart, ignoring old history range.
-                const visiblePoints = state.history.slice(-60);
+                // 1. Scan Current Book
+                scanBook(currentData);
 
-                if (visiblePoints.length === 0) {
-                    minPrice = currentMid * 0.999;
-                    maxPrice = currentMid * 1.001;
-                } else {
-                    visiblePoints.forEach(p => {
-                        const val = p.orderBook.mid_price;
-                        // FILTER: Ignore if 0 or >20% deviation from current
-                        if (val > 0 && Math.abs(val - currentMid) / currentMid < 0.2) {
-                            if (val < minPrice) minPrice = val;
-                            if (val > maxPrice) maxPrice = val;
-                        }
-                    });
+                // 2. Scan History (Last 150 points)
+                const recent = state.history.slice(-150);
+                recent.forEach(h => scanBook(h.orderBook));
 
-                    // Ensure current is definitely included
-                    if (currentMid < minPrice) minPrice = currentMid;
-                    if (currentMid > maxPrice) maxPrice = currentMid;
+                // 3. Fallback
+                if (minPrice === Infinity || maxPrice === -Infinity) {
+                    const mid = currentData.mid_price || 0;
+                    if (mid > 0) {
+                        minPrice = mid * 0.98;
+                        maxPrice = mid * 1.02;
+                    } else {
+                        return; // Abort if no valid price
+                    }
                 }
 
-                // Fallback if history was all garbage
-                if (minPrice === Infinity) {
-                    minPrice = currentMid * 0.995;
-                    maxPrice = currentMid * 1.005;
-                }
+                // 4. Add Padding (5%)
+                const span = maxPrice - minPrice;
+                minPrice = minPrice - (span * 0.05);
+                maxPrice = maxPrice + (span * 0.05);
 
-                // 4b. Add "Comfort" Padding (Tighter Zoom)
-                const spread = (currentData.asks[0]?.price || currentMid) - (currentData.bids[0]?.price || currentMid);
-                const safeSpread = spread > 0 ? spread : currentMid * 0.0001; // Prevent 0 spread
-                const minRange = safeSpread * 5; // MIN ZOOM: 5 Spreads (EXTREME CLOSE UP)
-
-                let range = maxPrice - minPrice;
-                if (range < minRange) range = minRange;
-
-                // Center view logic:
-                const centerPrice = (maxPrice + minPrice) / 2;
-                const halfHeight = range * 0.55; // 50% + 5% padding (Very Tight)
-
-                minPrice = centerPrice - halfHeight;
-                maxPrice = centerPrice + halfHeight;
-
-                // FINAL SAFETY CLAMP: No negative prices
+                // Safety: No Negative Prices
                 if (minPrice < 0) minPrice = 0;
 
                 // 4c. Volume Stats (Only considering visible range)
