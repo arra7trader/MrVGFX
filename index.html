@@ -1848,41 +1848,61 @@
                 const CHART_HEIGHT = height - LAYOUT.BOTTOM_MARGIN;
 
                 // 4. Calculate Screen Transforms (Y-Axis)
+                // SMART OUTLIER REJECTION:
+                // Only consider history points that are "sane" relative to current price.
+                // This prevents "0" prices or extreme spikes from breaking the scale.
+
                 let minPrice = Infinity;
                 let maxPrice = -Infinity;
+                const currentMid = currentData.mid_price;
 
-                // 4a. Find Min/Max Mid Price in visible history
-                const visiblePoints = state.history.slice(-MAX_HISTORY); // Consider all on-screen points
+                // Sanity Check: If current price is invalid/zero, abort comfortably
+                if (!currentMid || currentMid <= 0) return;
+
+                // 4a. Find Min/Max Mid Price in visible history (Filtered)
+                const visiblePoints = state.history.slice(-MAX_HISTORY);
+
                 if (visiblePoints.length === 0) {
-                    minPrice = currentData.mid_price * 0.999;
-                    maxPrice = currentData.mid_price * 1.001;
+                    minPrice = currentMid * 0.999;
+                    maxPrice = currentMid * 1.001;
                 } else {
                     visiblePoints.forEach(p => {
-                        if (p.orderBook.mid_price < minPrice) minPrice = p.orderBook.mid_price;
-                        if (p.orderBook.mid_price > maxPrice) maxPrice = p.orderBook.mid_price;
+                        const val = p.orderBook.mid_price;
+                        // FILTER: Ignore if 0 or >20% deviation from current (Order of Magnitude check)
+                        if (val > 0 && Math.abs(val - currentMid) / currentMid < 0.2) {
+                            if (val < minPrice) minPrice = val;
+                            if (val > maxPrice) maxPrice = val;
+                        }
                     });
-                    // Also include current
-                    if (currentData.mid_price < minPrice) minPrice = currentData.mid_price;
-                    if (currentData.mid_price > maxPrice) maxPrice = currentData.mid_price;
+
+                    // Ensure current is definitely included
+                    if (currentMid < minPrice) minPrice = currentMid;
+                    if (currentMid > maxPrice) maxPrice = currentMid;
+                }
+
+                // Fallback if history was all garbage
+                if (minPrice === Infinity) {
+                    minPrice = currentMid * 0.995;
+                    maxPrice = currentMid * 1.005;
                 }
 
                 // 4b. Add "Comfort" Padding (Tighter Zoom)
-                const mid = currentData.mid_price;
-                const spread = (currentData.asks[0]?.price || mid) - (currentData.bids[0]?.price || mid);
-                const minRange = spread * 8; // MIN ZOOM: 8 Spreads height (Very Close)
+                const spread = (currentData.asks[0]?.price || currentMid) - (currentData.bids[0]?.price || currentMid);
+                const safeSpread = spread > 0 ? spread : currentMid * 0.0001; // Prevent 0 spread
+                const minRange = safeSpread * 10; // MIN ZOOM: 10 Spreads
 
                 let range = maxPrice - minPrice;
                 if (range < minRange) range = minRange;
 
                 // Center view logic:
-                // Find center of price action
                 const centerPrice = (maxPrice + minPrice) / 2;
-
-                // Set boundary with 15% padding top/bottom
-                const halfHeight = range * 0.65; // 50% + 15% padding
+                const halfHeight = range * 0.6; // 50% + 10% padding
 
                 minPrice = centerPrice - halfHeight;
                 maxPrice = centerPrice + halfHeight;
+
+                // FINAL SAFETY CLAMP: No negative prices
+                if (minPrice < 0) minPrice = 0;
 
                 // 4c. Volume Stats (Only considering visible range)
                 let maxVol = 0;
