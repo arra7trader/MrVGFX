@@ -1860,7 +1860,9 @@
                 if (!currentMid || currentMid <= 0) return;
 
                 // 4a. Find Min/Max Mid Price in visible history (Filtered)
-                const visiblePoints = state.history.slice(-MAX_HISTORY);
+                // MICRO VIEW: Only scan the last 60 points (Recent Action) for scaling
+                // This ensures the view follows the head of the chart, ignoring old history range.
+                const visiblePoints = state.history.slice(-60);
 
                 if (visiblePoints.length === 0) {
                     minPrice = currentMid * 0.999;
@@ -1868,7 +1870,7 @@
                 } else {
                     visiblePoints.forEach(p => {
                         const val = p.orderBook.mid_price;
-                        // FILTER: Ignore if 0 or >20% deviation from current (Order of Magnitude check)
+                        // FILTER: Ignore if 0 or >20% deviation from current
                         if (val > 0 && Math.abs(val - currentMid) / currentMid < 0.2) {
                             if (val < minPrice) minPrice = val;
                             if (val > maxPrice) maxPrice = val;
@@ -1889,14 +1891,14 @@
                 // 4b. Add "Comfort" Padding (Tighter Zoom)
                 const spread = (currentData.asks[0]?.price || currentMid) - (currentData.bids[0]?.price || currentMid);
                 const safeSpread = spread > 0 ? spread : currentMid * 0.0001; // Prevent 0 spread
-                const minRange = safeSpread * 10; // MIN ZOOM: 10 Spreads
+                const minRange = safeSpread * 5; // MIN ZOOM: 5 Spreads (EXTREME CLOSE UP)
 
                 let range = maxPrice - minPrice;
                 if (range < minRange) range = minRange;
 
                 // Center view logic:
                 const centerPrice = (maxPrice + minPrice) / 2;
-                const halfHeight = range * 0.6; // 50% + 10% padding
+                const halfHeight = range * 0.55; // 50% + 5% padding (Very Tight)
 
                 minPrice = centerPrice - halfHeight;
                 maxPrice = centerPrice + halfHeight;
