@@ -948,6 +948,65 @@
         .whale-alert.hidden {
             display: none;
         }
+
+        /* ============================================
+           HEATMAP & VIEW TOGGLE STYLES
+           ============================================ */
+        .view-toggle {
+            display: flex;
+            background: var(--bg-card);
+            padding: 2px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            margin-right: 12px;
+        }
+
+        .toggle-btn {
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .heatmap-container {
+            display: none;
+            /* Hidden by default */
+            flex: 1;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+
+        #heatmapCanvas {
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            /* Sharp pixels for heatmap */
+        }
+
+        .heatmap-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
     </style>
 </head>
 
@@ -960,6 +1019,12 @@
                 MrVgFx
             </div>
             <div class="header-right">
+                <!-- VIEW TOGGLE (NEW) -->
+                <div class="view-toggle">
+                    <button class="toggle-btn active" id="btnDom" onclick="switchView('dom')">DOM</button>
+                    <button class="toggle-btn" id="btnHeatmap" onclick="switchView('heatmap')">HEATMAP</button>
+                </div>
+
                 <div class="status">
                     <span class="status-dot" id="statusDot"></span>
                     <span id="statusText">Connecting...</span>
@@ -1063,6 +1128,12 @@
                         <div class="spinner"></div>
                         <span>Connecting to MT5...</span>
                     </div>
+                </div>
+
+                <!-- Heatmap Container (NEW) -->
+                <div class="heatmap-container" id="heatmapContainer">
+                    <div class="heatmap-overlay">Order Flow Heatmap</div>
+                    <canvas id="heatmapCanvas"></canvas>
                 </div>
 
                 <!-- Signal Panel (sidebar right) -->
@@ -1395,6 +1466,7 @@
                     state.domData[data.symbol] = data;
                     if (data.symbol === state.currentSymbol) {
                         renderDOM(data);
+                        drawHeatmap(data); // Hook Heatmap Update
                     }
                     break;
             }
@@ -1646,6 +1718,117 @@
         // INIT
         // ============================================================================
         connectWebSocket();
+        // ============================================
+        // HEATMAP LOGIC
+        // ============================================
+        const heatmap = {
+            canvas: document.getElementById('heatmapCanvas'),
+            ctx: document.getElementById('heatmapCanvas').getContext('2d'),
+            initialized: false,
+            width: 0,
+            height: 0
+        };
+
+        function initHeatmap() {
+            const container = document.getElementById('heatmapContainer');
+            heatmap.width = container.clientWidth;
+            heatmap.height = container.clientHeight;
+            heatmap.canvas.width = heatmap.width;
+            heatmap.canvas.height = heatmap.height;
+            heatmap.initialized = true;
+
+            // Clear black
+            heatmap.ctx.fillStyle = '#000';
+            heatmap.ctx.fillRect(0, 0, heatmap.width, heatmap.height);
+        }
+
+        window.addEventListener('resize', () => {
+            if (document.getElementById('heatmapContainer').style.display !== 'none') {
+                initHeatmap();
+            } else {
+                heatmap.initialized = false;
+            }
+        });
+
+        function switchView(view) {
+            const domBtn = document.getElementById('btnDom');
+            const mapBtn = document.getElementById('btnHeatmap');
+            const domDiv = document.getElementById('domContainer');
+            const mapDiv = document.getElementById('heatmapContainer');
+            const zonePanel = document.getElementById('entryZonePanel');
+            // const signalPanel = document.getElementById('signalPanel'); // Keep Signal? Maybe hide for full width
+
+            if (view === 'dom') {
+                domBtn.classList.add('active');
+                mapBtn.classList.remove('active');
+                domDiv.style.display = 'flex';
+                mapDiv.style.display = 'none';
+                zonePanel.style.display = 'flex';
+            } else {
+                domBtn.classList.remove('active');
+                mapBtn.classList.add('active');
+                domDiv.style.display = 'none';
+                mapDiv.style.display = 'block';
+                zonePanel.style.display = 'none';
+
+                if (!heatmap.initialized) initHeatmap();
+            }
+        }
+
+        function drawHeatmap(data) {
+            // Auto-init if visible but not ready
+            const container = document.getElementById('heatmapContainer');
+            if (container.style.display !== 'none' && !heatmap.initialized) {
+                initHeatmap();
+            }
+            if (!heatmap.initialized) return;
+
+            const ctx = heatmap.ctx;
+            const w = heatmap.width;
+            const h = heatmap.height;
+
+            // 1. Shift Image Left
+            const imageData = ctx.getImageData(1, 0, w - 1, h);
+            ctx.putImageData(imageData, 0, 0);
+
+            // 2. Clear rightmost column
+            ctx.fillStyle = '#111';
+            ctx.fillRect(w - 1, 0, 1, h);
+
+            // 3. Map Prices to Y
+            const allLevels = [...data.asks, ...data.bids];
+            if (allLevels.length === 0) return;
+
+            // Use fixed 50 pips range centered on Mid Price for stability
+            // Or dynamic depending on visible order book
+            // Let's use Dynamic Min/Max of current book for now
+            const maxP = allLevels[0].price; // Highest Ask
+            const minP = allLevels[allLevels.length - 1].price; // Lowest Bid
+            const range = maxP - minP;
+            if (range <= 0) return;
+
+            const maxVol = data.max_volume || 10;
+
+            allLevels.forEach(level => {
+                const normalizedY = (maxP - level.price) / range;
+                const y = Math.floor(normalizedY * h);
+
+                // Intensity Based on Volume
+                let intensity = level.volume / maxVol;
+                intensity = Math.min(1, Math.max(0.1, intensity));
+
+                // Color Map: Blue (Low) -> Cyan -> Green -> Yellow -> Red (High)
+                // HSL Hue: 240 -> 0
+                const hue = 240 - (intensity * 240);
+                const light = 20 + (intensity * 50); // 20% to 70%
+
+                ctx.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
+
+                // Draw a slightly taller strip to avoid gaps if price range is large
+                const heightStrip = Math.max(2, h / allLevels.length);
+                ctx.fillRect(w - 1, y, 1, heightStrip);
+            });
+        }
     </script>
 </body>
 
