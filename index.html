@@ -1866,19 +1866,23 @@
                     if (currentData.mid_price > maxPrice) maxPrice = currentData.mid_price;
                 }
 
-                // 4b. Add "Comfort" Padding (0.1% or minimum 10 pips)
-                // Determine a reasonable range based on volatility or fixed %
+                // 4b. Add "Comfort" Padding (Tighter Zoom)
                 const mid = currentData.mid_price;
                 const spread = (currentData.asks[0]?.price || mid) - (currentData.bids[0]?.price || mid);
-                const minRange = spread * 20; // Ensure at least 20 spreads height
+                const minRange = spread * 8; // MIN ZOOM: 8 Spreads height (Very Close)
 
                 let range = maxPrice - minPrice;
                 if (range < minRange) range = minRange;
 
-                // Center the view on the price action path, plus padding
-                const padding = range * 0.5;
-                minPrice -= padding;
-                maxPrice += padding;
+                // Center view logic:
+                // Find center of price action
+                const centerPrice = (maxPrice + minPrice) / 2;
+
+                // Set boundary with 15% padding top/bottom
+                const halfHeight = range * 0.65; // 50% + 15% padding
+
+                minPrice = centerPrice - halfHeight;
+                maxPrice = centerPrice + halfHeight;
 
                 // 4c. Volume Stats (Only considering visible range)
                 let maxVol = 0;
