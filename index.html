@@ -1854,65 +1854,64 @@
                 const HISTORY_WIDTH = CHART_WIDTH - LAYOUT.FUTURE_WIDTH;
                 const CHART_HEIGHT = height - LAYOUT.BOTTOM_MARGIN;
 
-                // 4. Calculate Screen Transforms (Y-Axis) - REFERENCE LOGIC
-                // "plek ketiplek" (Exact Replica) from HeatmapBubble.tsx
+                // 4. Calculate Screen Transforms (Y-Axis) - AGGRESSIVE RESPONSIVE (Loncat-Loncat)
+                // Client Request: "Loncat-loncat" -> Needs strict centering and short memory.
+
                 let minPrice = Infinity;
                 let maxPrice = -Infinity;
-
-                // Helper to scan book extremes
-                const scanBook = (book) => {
-                    if (book.bids && book.bids.length > 0) {
-                        minPrice = Math.min(minPrice, book.bids[book.bids.length - 1].price);
-                    }
-                    if (book.asks && book.asks.length > 0) {
-                        maxPrice = Math.max(maxPrice, book.asks[book.asks.length - 1].price);
-                    }
-                };
-
-                // 1. Scan Current Book
-                scanBook(currentData);
-
-                // 2. Scan History (Last 150 points)
-                const recent = state.history.slice(-150);
-                recent.forEach(h => scanBook(h.orderBook));
-
-                // 3. Fallback
-                if (minPrice === Infinity || maxPrice === -Infinity) {
-                    const mid = currentData.mid_price || 0;
-                    if (mid > 0) {
-                        minPrice = mid * 0.98;
-                        maxPrice = mid * 1.02;
-                    } else {
-                        return; // Abort if no valid price
-                    }
-                }
-
-                // 4. Add Padding (5%)
-                const span = maxPrice - minPrice;
-                minPrice = minPrice - (span * 0.05);
-                maxPrice = maxPrice + (span * 0.05);
-
-                // HYBRID FIX: Ensure "Dynamic Movement" (Naik Turun)
-                // If current Mid Price is too close to Top or Bottom, shift the view.
-                // This fixes the "static/laggy" feel when hidden history anchors the scale.
                 const currentMid = currentData.mid_price;
-                const viewRange = maxPrice - minPrice;
-                const distFromMin = currentMid - minPrice;
-                const distFromMax = maxPrice - currentMid;
 
-                // If price is in the top 20% or bottom 20%, SHIFT the view to center it more.
-                // We don't shrink the range (to keep history), we just slide it.
-                if (distFromMin < viewRange * 0.25) {
-                    // Too low? Shift down
-                    const shift = (viewRange * 0.25) - distFromMin;
-                    minPrice -= shift;
-                    maxPrice -= shift;
-                } else if (distFromMax < viewRange * 0.25) {
-                    // Too high? Shift up
-                    const shift = (viewRange * 0.25) - distFromMax;
-                    minPrice += shift;
-                    maxPrice += shift;
+                if (!currentMid || currentMid <= 0) return;
+
+                // 1. Scan ONLY Recent History (40 ticks = Fast Reaction)
+                const visiblePoints = state.history.slice(-40);
+
+                if (visiblePoints.length === 0) {
+                    minPrice = currentMid * 0.999;
+                    maxPrice = currentMid * 1.001;
+                } else {
+                    visiblePoints.forEach(p => {
+                        const val = p.orderBook.mid_price;
+                        // Smart Filter: Ignore outliers > 20% diff
+                        if (val > 0 && Math.abs(val - currentMid) / currentMid < 0.2) {
+                            if (val < minPrice) minPrice = val;
+                            if (val > maxPrice) maxPrice = val;
+                        }
+                    });
+                    // Include Current
+                    if (currentMid < minPrice) minPrice = currentMid;
+                    if (currentMid > maxPrice) maxPrice = currentMid;
                 }
+
+                // Fallback
+                if (minPrice === Infinity) {
+                    minPrice = currentMid * 0.995;
+                    maxPrice = currentMid * 1.005;
+                }
+
+                // 2. Strict Centering Logic (The "Loncat" Effect)
+                // Instead of just fitting min/max, we FORCE the current price to be the Center.
+                // Then we expand the range to fit the recent min/max + padding.
+
+                const distUp = maxPrice - currentMid;
+                const distDown = currentMid - minPrice;
+                let maxDist = Math.max(distUp, distDown);
+
+                // MIN ZOOM: 6 Spreads (Very lively)
+                const spread = (currentData.asks[0]?.price || currentMid) - (currentData.bids[0]?.price || currentMid);
+                const minDist = (spread * 6) / 2; // Half range
+
+                if (maxDist < minDist) maxDist = minDist;
+
+                // Add tiny padding (5%)
+                maxDist = maxDist * 1.05;
+
+                // Force limits centered on current
+                minPrice = currentMid - maxDist;
+                maxPrice = currentMid + maxDist;
+
+                // Safety
+                if (minPrice < 0) minPrice = 0;
 
                 // Safety: No Negative Prices
                 if (minPrice < 0) minPrice = 0;
