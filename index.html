@@ -1484,7 +1484,14 @@
         }
 
         function selectSymbol(symbol) {
+            // Reset Heatmap Data if symbol changed
+            if (state.currentSymbol !== symbol) {
+                state.history = [];
+                state.wallHistory.clear();
+                heatmap.initialized = false;
+            }
             state.currentSymbol = symbol;
+
             document.querySelectorAll('.tab').forEach(t => {
                 t.classList.toggle('active', t.textContent === symbol);
             });
