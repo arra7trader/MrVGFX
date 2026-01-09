@@ -1854,66 +1854,58 @@
                 const HISTORY_WIDTH = CHART_WIDTH - LAYOUT.FUTURE_WIDTH;
                 const CHART_HEIGHT = height - LAYOUT.BOTTOM_MARGIN;
 
-                // 4. Calculate Screen Transforms (Y-Axis) - AGGRESSIVE RESPONSIVE (Loncat-Loncat)
-                // Client Request: "Loncat-loncat" -> Needs strict centering and short memory.
-
-                let minPrice = Infinity;
-                let maxPrice = -Infinity;
+                // 4. Calculate Screen Transforms (Y-Axis) - STICKY CAMERA (DEADZONE)
+                // Logic: Camera stays still (sticky) while price moves in the middle 60% (Deadzone).
+                // Camera only pans when price hits the edges (Top 20% or Bottom 20%).
+                
                 const currentMid = currentData.mid_price;
-
                 if (!currentMid || currentMid <= 0) return;
 
-                // 1. Scan ONLY Recent History (40 ticks = Fast Reaction)
-                const visiblePoints = state.history.slice(-40);
-
-                if (visiblePoints.length === 0) {
-                    minPrice = currentMid * 0.999;
-                    maxPrice = currentMid * 1.001;
-                } else {
-                    visiblePoints.forEach(p => {
-                        const val = p.orderBook.mid_price;
-                        // Smart Filter: Ignore outliers > 20% diff
-                        if (val > 0 && Math.abs(val - currentMid) / currentMid < 0.2) {
-                            if (val < minPrice) minPrice = val;
-                            if (val > maxPrice) maxPrice = val;
-                        }
-                    });
-                    // Include Current
-                    if (currentMid < minPrice) minPrice = currentMid;
-                    if (currentMid > maxPrice) maxPrice = currentMid;
-                }
-
-                // Fallback
-                if (minPrice === Infinity) {
-                    minPrice = currentMid * 0.995;
-                    maxPrice = currentMid * 1.005;
-                }
-
-                // 2. Strict Centering Logic (The "Loncat" Effect)
-                // Instead of just fitting min/max, we FORCE the current price to be the Center.
-                // Then we expand the range to fit the recent min/max + padding.
-
-                const distUp = maxPrice - currentMid;
-                const distDown = currentMid - minPrice;
-                let maxDist = Math.max(distUp, distDown);
-
-                // MIN ZOOM: 6 Spreads (Very lively)
+                // Define Fixed Zoom Height (e.g., 15 Spreads) for consistent scale
                 const spread = (currentData.asks[0]?.price || currentMid) - (currentData.bids[0]?.price || currentMid);
-                const minDist = (spread * 6) / 2; // Half range
+                const safeSpread = spread > 0 ? spread : currentMid * 0.0001;
+                const fixedRange = safeSpread * 15; // Fixed height of the view window (15 spreads)
 
-                if (maxDist < minDist) maxDist = minDist;
+                // Initialize Camera if needed
+                if (!state.camera) {
+                    state.camera = {
+                        min: currentMid - (fixedRange / 2),
+                        max: currentMid + (fixedRange / 2)
+                    };
+                }
 
-                // Add tiny padding (5%)
-                maxDist = maxDist * 1.05;
+                // Deadzone Logic:
+                // Safe Zone is 20% to 80% of the screen.
+                let camMin = state.camera.min;
+                let camMax = state.camera.max;
 
-                // Force limits centered on current
-                minPrice = currentMid - maxDist;
-                maxPrice = currentMid + maxDist;
+                // Check boundaries
+                const distFromMin = currentMid - camMin; // Distance from bottom
+                const distFromMax = camMax - currentMid; // Distance from top
+
+                const deadzoneBuffer = fixedRange * 0.2; // 20% top/bottom buffer
+
+                if (distFromMin < deadzoneBuffer) {
+                    // Hit Bottom Buffer -> Shift Camera Down
+                    const shift = deadzoneBuffer - distFromMin;
+                    camMin -= shift;
+                    camMax -= shift;
+                } else if (distFromMax < deadzoneBuffer) {
+                    // Hit Top Buffer -> Shift Camera Up
+                    const shift = deadzoneBuffer - distFromMax;
+                    camMin += shift;
+                    camMax += shift;
+                }
+                
+                // Update State and Layout
+                state.camera.min = camMin;
+                state.camera.max = camMax;
+
+                // Set Layout Variables
+                minPrice = camMin;
+                maxPrice = camMax;
 
                 // Safety
-                if (minPrice < 0) minPrice = 0;
-
-                // Safety: No Negative Prices
                 if (minPrice < 0) minPrice = 0;
 
                 // 4c. Volume Stats (Only considering visible range)
