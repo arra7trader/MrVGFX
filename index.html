@@ -1892,6 +1892,28 @@
                 minPrice = minPrice - (span * 0.05);
                 maxPrice = maxPrice + (span * 0.05);
 
+                // HYBRID FIX: Ensure "Dynamic Movement" (Naik Turun)
+                // If current Mid Price is too close to Top or Bottom, shift the view.
+                // This fixes the "static/laggy" feel when hidden history anchors the scale.
+                const currentMid = currentData.mid_price;
+                const viewRange = maxPrice - minPrice;
+                const distFromMin = currentMid - minPrice;
+                const distFromMax = maxPrice - currentMid;
+
+                // If price is in the top 20% or bottom 20%, SHIFT the view to center it more.
+                // We don't shrink the range (to keep history), we just slide it.
+                if (distFromMin < viewRange * 0.25) {
+                    // Too low? Shift down
+                    const shift = (viewRange * 0.25) - distFromMin;
+                    minPrice -= shift;
+                    maxPrice -= shift;
+                } else if (distFromMax < viewRange * 0.25) {
+                    // Too high? Shift up
+                    const shift = (viewRange * 0.25) - distFromMax;
+                    minPrice += shift;
+                    maxPrice += shift;
+                }
+
                 // Safety: No Negative Prices
                 if (minPrice < 0) minPrice = 0;
 
