@@ -1850,244 +1850,267 @@
                 // 4. Calculate Screen Transforms (Y-Axis)
                 let minPrice = Infinity;
                 let maxPrice = -Infinity;
+
+                // 4a. Find Min/Max Mid Price in visible history
+                const visiblePoints = state.history.slice(-MAX_HISTORY); // Consider all on-screen points
+                if (visiblePoints.length === 0) {
+                    minPrice = currentData.mid_price * 0.999;
+                    maxPrice = currentData.mid_price * 1.001;
+                } else {
+                    visiblePoints.forEach(p => {
+                        if (p.orderBook.mid_price < minPrice) minPrice = p.orderBook.mid_price;
+                        if (p.orderBook.mid_price > maxPrice) maxPrice = p.orderBook.mid_price;
+                    });
+                    // Also include current
+                    if (currentData.mid_price < minPrice) minPrice = currentData.mid_price;
+                    if (currentData.mid_price > maxPrice) maxPrice = currentData.mid_price;
+                }
+
+                // 4b. Add "Comfort" Padding (0.1% or minimum 10 pips)
+                // Determine a reasonable range based on volatility or fixed %
+                const mid = currentData.mid_price;
+                const spread = (currentData.asks[0]?.price || mid) - (currentData.bids[0]?.price || mid);
+                const minRange = spread * 20; // Ensure at least 20 spreads height
+
+                let range = maxPrice - minPrice;
+                if (range < minRange) range = minRange;
+
+                // Center the view on the price action path, plus padding
+                const padding = range * 0.5;
+                minPrice -= padding;
+                maxPrice += padding;
+
+                // 4c. Volume Stats (Only considering visible range)
                 let maxVol = 0;
                 let totalVol = 0;
                 let count = 0;
 
+                // Only scan levels within our visual range to normalize colors for *visible* liquidity
                 const scanLevels = (levels) => {
                     levels.forEach(l => {
-                        if (l.price < minPrice) minPrice = l.price;
-                        if (l.price > maxPrice) maxPrice = l.price;
-                        if (l.volume > maxVol) maxVol = l.volume;
-                        totalVol += l.volume;
-                        count++;
+                        // Only count volume if inside vertical view
+                        if (l.price >= minPrice && l.price <= maxPrice) {
+                            if (l.volume > maxVol) maxVol = l.volume;
+                            totalVol += l.volume;
+                            count++;
+                        }
                     });
                 };
 
-                // Scan recent history
-                const safeHistory = state.history.slice(-150); // increased scope
-                safeHistory.forEach(h => {
+                // Scan just recent history for Volume color scaling (responsive)
+                state.history.slice(-50).forEach(h => {
                     if (h.orderBook && h.orderBook.bids) scanLevels(h.orderBook.bids);
                     if (h.orderBook && h.orderBook.asks) scanLevels(h.orderBook.asks);
                 });
                 scanLevels(currentData.bids);
                 scanLevels(currentData.asks);
 
-                // Fallback if no data
-                if (minPrice === Infinity || maxPrice === -Infinity) {
-                    if (currentData.mid_price) {
-                        minPrice = currentData.mid_price * 0.999;
-                        maxPrice = currentData.mid_price * 1.001;
-                    } else {
-                        // console.warn("[Heatmap] No valid price range found");
-                        return;
-                    }
-                }
+            }
 
                 // Padding to prevent edges
                 const priceSpan = maxPrice - minPrice || 1;
-                minPrice -= priceSpan * 0.1;
-                maxPrice += priceSpan * 0.1;
-                const displaySpan = maxPrice - minPrice;
+            minPrice -= priceSpan * 0.1;
+            maxPrice += priceSpan * 0.1;
+            const displaySpan = maxPrice - minPrice;
 
-                const avgVol = count > 0 ? totalVol / count : 1;
-                const capVol = Math.max(maxVol, avgVol * 8);
+            const avgVol = count > 0 ? totalVol / count : 1;
+            const capVol = Math.max(maxVol, avgVol * 8);
 
-                const getY = (price) => {
-                    if (!displaySpan) return CHART_HEIGHT / 2;
-                    return CHART_HEIGHT - ((price - minPrice) / displaySpan) * CHART_HEIGHT;
-                };
+            const getY = (price) => {
+                if (!displaySpan) return CHART_HEIGHT / 2;
+                return CHART_HEIGHT - ((price - minPrice) / displaySpan) * CHART_HEIGHT;
+            };
 
-                // 5. Clear Canvas
-                ctx.fillStyle = '#0a0f1a';
-                ctx.fillRect(0, 0, width, height);
+            // 5. Clear Canvas
+            ctx.fillStyle = '#0a0f1a';
+            ctx.fillRect(0, 0, width, height);
 
-                // 6. Grid Lines
-                ctx.strokeStyle = '#1e293b';
-                ctx.lineWidth = 0.5;
-                for (let i = 1; i < 5; i++) {
-                    const y = (CHART_HEIGHT / 5) * i;
-                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CHART_WIDTH, y); ctx.stroke();
-                }
-
-                // 7. Render History
-                const points = state.history;
-                const availableWidth = HISTORY_WIDTH;
-                // Avoid divide by zero
-                const pointWidth = Math.max(2, availableWidth / Math.max(1, MAX_HISTORY));
-
-                // Draw from right to left
-                const visibleCount = Math.min(points.length, Math.ceil(availableWidth / pointWidth));
-                const startIdx = points.length - visibleCount;
-
-                for (let i = startIdx; i < points.length; i++) {
-                    const pt = points[i];
-                    // Index relative to end of history array (0 = oldest visible, visibleCount-1 = newest)
-                    // We want newest at HISTORY_WIDTH
-                    // let x = HISTORY_WIDTH - ((points.length - 1 - i) * pointWidth);
-
-                    const offsetFromRight = (points.length - 1 - i);
-                    const x = HISTORY_WIDTH - (offsetFromRight * pointWidth) - pointWidth;
-
-                    // Asks
-                    pt.orderBook.asks.forEach(ask => {
-                        if (ask.volume < avgVol * 0.1) return;
-                        const y = getY(ask.price);
-                        const intensity = ask.volume / capVol;
-                        ctx.fillStyle = getHeatmapColor(intensity);
-                        ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(pointWidth) + 1, 3);
-                    });
-                    // Bids
-                    pt.orderBook.bids.forEach(bid => {
-                        if (bid.volume < avgVol * 0.1) return;
-                        const y = getY(bid.price);
-                        const intensity = bid.volume / capVol;
-                        ctx.fillStyle = getHeatmapColor(intensity);
-                        ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(pointWidth) + 1, 3);
-                    });
-                }
-
-                // 8. Price Line
-                ctx.beginPath();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2;
-                ctx.shadowBlur = 8;
-                ctx.shadowColor = '#3b82f6';
-
-                let moved = false;
-                for (let i = startIdx; i < points.length; i++) {
-                    const pt = points[i];
-                    const offsetFromRight = (points.length - 1 - i);
-                    const x = HISTORY_WIDTH - (offsetFromRight * pointWidth) - (pointWidth / 2);
-                    const y = getY(pt.orderBook.mid_price);
-
-                    if (!moved) { ctx.moveTo(x, y); moved = true; }
-                    else ctx.lineTo(x, y);
-                }
-                // Connect to current
-                if (moved) {
-                    const lastY = getY(currentData.mid_price);
-                    ctx.lineTo(HISTORY_WIDTH, lastY);
-                    ctx.stroke();
-                }
-                ctx.shadowBlur = 0;
-
-                // 9. Future Zone
-                const futureX = HISTORY_WIDTH;
-
-                // Separator
-                ctx.beginPath();
-                ctx.setLineDash([4, 4]);
-                ctx.strokeStyle = '#475569';
-                ctx.moveTo(futureX, 0); ctx.lineTo(futureX, CHART_HEIGHT);
-                ctx.stroke();
-                ctx.setLineDash([]);
-
-                // Label
-                ctx.fillStyle = '#64748b';
-                ctx.font = 'bold 10px Inter';
-                ctx.fillText('▶ FUTURE ORDERS', futureX + 10, 15);
-
-                // Mid Line
-                ctx.beginPath();
-                ctx.strokeStyle = '#3b82f6';
-                ctx.setLineDash([8, 4]);
-                ctx.moveTo(futureX, getY(currentData.mid_price));
-                ctx.lineTo(CHART_WIDTH, getY(currentData.mid_price));
-                ctx.stroke();
-                ctx.setLineDash([]);
-
-                // Future Bars
-                const drawFutureBar = (level, type) => {
-                    const y = getY(level.price);
-                    const intensity = level.volume / capVol;
-                    const barW = Math.min(LAYOUT.FUTURE_WIDTH * intensity * 1.5, LAYOUT.FUTURE_WIDTH - 20);
-
-                    const g = ctx.createLinearGradient(futureX, 0, futureX + barW, 0);
-                    if (type === 'ASK') {
-                        g.addColorStop(0, 'rgba(239, 68, 68, 0.8)');
-                        g.addColorStop(1, 'rgba(239, 68, 68, 0.1)');
-                    } else {
-                        g.addColorStop(0, 'rgba(34, 197, 94, 0.8)');
-                        g.addColorStop(1, 'rgba(34, 197, 94, 0.1)');
-                    }
-                    ctx.fillStyle = g;
-                    ctx.fillRect(futureX, y - 2, barW, 4);
-                };
-                currentData.asks.forEach(a => drawFutureBar(a, 'ASK'));
-                currentData.bids.forEach(b => drawFutureBar(b, 'BID'));
-
-                // 10. Whale Walls
-                const whaleThreshold = Math.max(avgVol * 2, maxVol * 0.4);
-
-                const updateWall = (level, type) => {
-                    if (level.volume < avgVol * 1.5) return;
-                    const key = `${type}-${level.price.toFixed(currentData.digits || 2)}`;
-                    const existing = state.wallHistory.get(key);
-                    const sizeClass = classifyOrderSize(level.volume, avgVol);
-
-                    if (existing) {
-                        existing.lastSeen = now;
-                        existing.volume = level.volume;
-                        existing.sizeClass = sizeClass;
-                    } else {
-                        state.wallHistory.set(key, {
-                            price: level.price, volume: level.volume, type,
-                            firstSeen: now, lastSeen: now, sizeClass
-                        });
-                    }
-                };
-                currentData.asks.forEach(a => updateWall(a, 'ASK'));
-                currentData.bids.forEach(b => updateWall(b, 'BID'));
-
-                state.wallHistory.forEach((val, key) => {
-                    if (now - val.lastSeen > 3000) state.wallHistory.delete(key);
-                });
-
-                state.wallHistory.forEach(wall => {
-                    if (wall.volume < whaleThreshold) return;
-                    const ageMs = now - wall.firstSeen;
-                    const ageSec = Math.floor(ageMs / 1000);
-                    const y = getY(wall.price);
-
-                    const alpha = Math.min(0.2 + (ageSec / 20) * 0.6, 0.8);
-                    ctx.fillStyle = wall.type === 'ASK' ? `rgba(239, 68, 68, ${alpha})` : `rgba(34, 197, 94, ${alpha})`;
-                    ctx.fillRect(futureX, y - 8, LAYOUT.FUTURE_WIDTH, 16);
-
-                    ctx.strokeStyle = wall.type === 'ASK' ? '#ef4444' : '#22c55e';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath(); ctx.moveTo(futureX, y); ctx.lineTo(CHART_WIDTH, y); ctx.stroke();
-
-                    const icon = getSizeIcon(wall.sizeClass);
-                    let label = `${icon} ${wall.volume.toFixed(2)}`;
-                    if (ageSec > 5) label += ` (${ageSec}s)`;
-
-                    ctx.font = 'bold 11px Inter';
-                    ctx.fillStyle = '#fff';
-                    ctx.fillText(label, CHART_WIDTH - 120, y + 4);
-                });
-
-                // 11. Price Axis
-                const axisX = CHART_WIDTH + LAYOUT.VOLUME_PROFILE_WIDTH;
-                ctx.fillStyle = '#1e293b';
-                ctx.fillRect(axisX, 0, LAYOUT.PRICE_AXIS_WIDTH, height);
-
-                ctx.fillStyle = '#94a3b8';
-                ctx.font = '10px Monospace';
-                for (let i = 0; i <= 10; i++) {
-                    const p = minPrice + (displaySpan * (i / 10));
-                    const y = getY(p);
-                    ctx.fillText(p.toFixed(currentData.digits || 2), axisX + 4, y + 3);
-                }
-                const currY = getY(currentData.mid_price);
-                ctx.fillStyle = '#3b82f6';
-                ctx.fillRect(axisX, currY - 10, LAYOUT.PRICE_AXIS_WIDTH, 20);
-                ctx.fillStyle = '#fff';
-                ctx.fillText(currentData.mid_price.toFixed(currentData.digits), axisX + 4, currY + 4);
-
-            } catch (err) {
-                console.error("[Heatmap Render Error]", err);
+            // 6. Grid Lines
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 0.5;
+            for (let i = 1; i < 5; i++) {
+                const y = (CHART_HEIGHT / 5) * i;
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CHART_WIDTH, y); ctx.stroke();
             }
+
+            // 7. Render History
+            const points = state.history;
+            const availableWidth = HISTORY_WIDTH;
+            // Avoid divide by zero
+            const pointWidth = Math.max(2, availableWidth / Math.max(1, MAX_HISTORY));
+
+            // Draw from right to left
+            const visibleCount = Math.min(points.length, Math.ceil(availableWidth / pointWidth));
+            const startIdx = points.length - visibleCount;
+
+            for (let i = startIdx; i < points.length; i++) {
+                const pt = points[i];
+                // Index relative to end of history array (0 = oldest visible, visibleCount-1 = newest)
+                // We want newest at HISTORY_WIDTH
+                // let x = HISTORY_WIDTH - ((points.length - 1 - i) * pointWidth);
+
+                const offsetFromRight = (points.length - 1 - i);
+                const x = HISTORY_WIDTH - (offsetFromRight * pointWidth) - pointWidth;
+
+                // Asks
+                pt.orderBook.asks.forEach(ask => {
+                    if (ask.volume < avgVol * 0.1) return;
+                    const y = getY(ask.price);
+                    const intensity = ask.volume / capVol;
+                    ctx.fillStyle = getHeatmapColor(intensity);
+                    ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(pointWidth) + 1, 3);
+                });
+                // Bids
+                pt.orderBook.bids.forEach(bid => {
+                    if (bid.volume < avgVol * 0.1) return;
+                    const y = getY(bid.price);
+                    const intensity = bid.volume / capVol;
+                    ctx.fillStyle = getHeatmapColor(intensity);
+                    ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(pointWidth) + 1, 3);
+                });
+            }
+
+            // 8. Price Line
+            ctx.beginPath();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#3b82f6';
+
+            let moved = false;
+            for (let i = startIdx; i < points.length; i++) {
+                const pt = points[i];
+                const offsetFromRight = (points.length - 1 - i);
+                const x = HISTORY_WIDTH - (offsetFromRight * pointWidth) - (pointWidth / 2);
+                const y = getY(pt.orderBook.mid_price);
+
+                if (!moved) { ctx.moveTo(x, y); moved = true; }
+                else ctx.lineTo(x, y);
+            }
+            // Connect to current
+            if (moved) {
+                const lastY = getY(currentData.mid_price);
+                ctx.lineTo(HISTORY_WIDTH, lastY);
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+
+            // 9. Future Zone
+            const futureX = HISTORY_WIDTH;
+
+            // Separator
+            ctx.beginPath();
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = '#475569';
+            ctx.moveTo(futureX, 0); ctx.lineTo(futureX, CHART_HEIGHT);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Label
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'bold 10px Inter';
+            ctx.fillText('▶ FUTURE ORDERS', futureX + 10, 15);
+
+            // Mid Line
+            ctx.beginPath();
+            ctx.strokeStyle = '#3b82f6';
+            ctx.setLineDash([8, 4]);
+            ctx.moveTo(futureX, getY(currentData.mid_price));
+            ctx.lineTo(CHART_WIDTH, getY(currentData.mid_price));
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Future Bars
+            const drawFutureBar = (level, type) => {
+                const y = getY(level.price);
+                const intensity = level.volume / capVol;
+                const barW = Math.min(LAYOUT.FUTURE_WIDTH * intensity * 1.5, LAYOUT.FUTURE_WIDTH - 20);
+
+                const g = ctx.createLinearGradient(futureX, 0, futureX + barW, 0);
+                if (type === 'ASK') {
+                    g.addColorStop(0, 'rgba(239, 68, 68, 0.8)');
+                    g.addColorStop(1, 'rgba(239, 68, 68, 0.1)');
+                } else {
+                    g.addColorStop(0, 'rgba(34, 197, 94, 0.8)');
+                    g.addColorStop(1, 'rgba(34, 197, 94, 0.1)');
+                }
+                ctx.fillStyle = g;
+                ctx.fillRect(futureX, y - 2, barW, 4);
+            };
+            currentData.asks.forEach(a => drawFutureBar(a, 'ASK'));
+            currentData.bids.forEach(b => drawFutureBar(b, 'BID'));
+
+            // 10. Whale Walls
+            const whaleThreshold = Math.max(avgVol * 2, maxVol * 0.4);
+
+            const updateWall = (level, type) => {
+                if (level.volume < avgVol * 1.5) return;
+                const key = `${type}-${level.price.toFixed(currentData.digits || 2)}`;
+                const existing = state.wallHistory.get(key);
+                const sizeClass = classifyOrderSize(level.volume, avgVol);
+
+                if (existing) {
+                    existing.lastSeen = now;
+                    existing.volume = level.volume;
+                    existing.sizeClass = sizeClass;
+                } else {
+                    state.wallHistory.set(key, {
+                        price: level.price, volume: level.volume, type,
+                        firstSeen: now, lastSeen: now, sizeClass
+                    });
+                }
+            };
+            currentData.asks.forEach(a => updateWall(a, 'ASK'));
+            currentData.bids.forEach(b => updateWall(b, 'BID'));
+
+            state.wallHistory.forEach((val, key) => {
+                if (now - val.lastSeen > 3000) state.wallHistory.delete(key);
+            });
+
+            state.wallHistory.forEach(wall => {
+                if (wall.volume < whaleThreshold) return;
+                const ageMs = now - wall.firstSeen;
+                const ageSec = Math.floor(ageMs / 1000);
+                const y = getY(wall.price);
+
+                const alpha = Math.min(0.2 + (ageSec / 20) * 0.6, 0.8);
+                ctx.fillStyle = wall.type === 'ASK' ? `rgba(239, 68, 68, ${alpha})` : `rgba(34, 197, 94, ${alpha})`;
+                ctx.fillRect(futureX, y - 8, LAYOUT.FUTURE_WIDTH, 16);
+
+                ctx.strokeStyle = wall.type === 'ASK' ? '#ef4444' : '#22c55e';
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(futureX, y); ctx.lineTo(CHART_WIDTH, y); ctx.stroke();
+
+                const icon = getSizeIcon(wall.sizeClass);
+                let label = `${icon} ${wall.volume.toFixed(2)}`;
+                if (ageSec > 5) label += ` (${ageSec}s)`;
+
+                ctx.font = 'bold 11px Inter';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(label, CHART_WIDTH - 120, y + 4);
+            });
+
+            // 11. Price Axis
+            const axisX = CHART_WIDTH + LAYOUT.VOLUME_PROFILE_WIDTH;
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(axisX, 0, LAYOUT.PRICE_AXIS_WIDTH, height);
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '10px Monospace';
+            for (let i = 0; i <= 10; i++) {
+                const p = minPrice + (displaySpan * (i / 10));
+                const y = getY(p);
+                ctx.fillText(p.toFixed(currentData.digits || 2), axisX + 4, y + 3);
+            }
+            const currY = getY(currentData.mid_price);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(axisX, currY - 10, LAYOUT.PRICE_AXIS_WIDTH, 20);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(currentData.mid_price.toFixed(currentData.digits), axisX + 4, currY + 4);
+
+        } catch (err) {
+            console.error("[Heatmap Render Error]", err);
+        }
         }
     </script>
 </body>
