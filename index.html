@@ -2112,8 +2112,66 @@
                     ctx.fillText(label, CHART_WIDTH - 120, y + 4);
                 });
 
-                // 11. Price Axis
-                const axisX = CHART_WIDTH + LAYOUT.VOLUME_PROFILE_WIDTH;
+                // 11. PRICE AXIS & VOLUME PROFILE (Combined)
+                const axisX = CHART_WIDTH + LAYOUT.VOLUME_PROFILE_WIDTH; // Start of Price Axis
+                const vpX = CHART_WIDTH; // Start of Volume Profile (Left of Price Axis)
+
+                // Draw Volume Profile Background
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+                ctx.fillRect(vpX, 0, LAYOUT.VOLUME_PROFILE_WIDTH + LAYOUT.PRICE_AXIS_WIDTH, height);
+
+                // Calculate Volume Profile for Visible Range
+                const priceBuckets = new Map(); // Key: Price Level, Value: { bidVol, askVol }
+                const bucketSize = (maxPrice - minPrice) / 50; // Dynamic bucket size
+
+                const addToBucket = (price, volume, type) => {
+                    if (price < minPrice || price > maxPrice) return;
+                    // Quantize price
+                    const p = Math.floor(price / bucketSize) * bucketSize;
+                    if (!priceBuckets.has(p)) priceBuckets.set(p, { bid: 0, ask: 0 });
+                    const b = priceBuckets.get(p);
+                    if (type === 'ASK') b.ask += volume;
+                    else b.bid += volume;
+                };
+
+                // Populate buckets from History (Visible only)
+                state.history.slice(-100).forEach(h => {
+                    h.orderBook.asks.forEach(a => addToBucket(a.price, a.volume, 'ASK'));
+                    h.orderBook.bids.forEach(b => addToBucket(b.price, b.volume, 'BID'));
+                });
+
+                // Find Max Volume for scaling
+                let maxBucketVol = 0;
+                priceBuckets.forEach(b => {
+                    const total = b.ask + b.bid;
+                    if (total > maxBucketVol) maxBucketVol = total;
+                });
+
+                // Render Buckets
+                priceBuckets.forEach((vol, price) => {
+                    const y = getY(price);
+                    const barHeight = Math.max(1, (CHART_HEIGHT / 50) - 1);
+                    const total = vol.ask + vol.bid;
+                    const widthRef = LAYOUT.VOLUME_PROFILE_WIDTH - 2;
+
+                    if (total === 0) return;
+
+                    // Bid Bar (Green)
+                    const bidW = (vol.bid / maxBucketVol) * widthRef;
+                    ctx.fillStyle = 'rgba(34, 197, 94, 0.5)';
+                    ctx.fillRect(vpX, y - barHeight / 2, bidW, barHeight);
+
+                    // Ask Bar (Red) - Stacked
+                    const askW = (vol.ask / maxBucketVol) * widthRef;
+                    ctx.fillStyle = 'rgba(239, 68, 68, 0.5)';
+                    ctx.fillRect(vpX + bidW, y - barHeight / 2, askW, barHeight);
+                });
+
+                // Vertical Separator Line
+                ctx.strokeStyle = '#334155';
+                ctx.beginPath(); ctx.moveTo(vpX, 0); ctx.lineTo(vpX, height); ctx.stroke();
+
+                // 12. DRAW PRICE LABELS (On top of everything)
                 ctx.fillStyle = '#1e293b';
                 ctx.fillRect(axisX, 0, LAYOUT.PRICE_AXIS_WIDTH, height);
 
@@ -2129,6 +2187,34 @@
                 ctx.fillRect(axisX, currY - 10, LAYOUT.PRICE_AXIS_WIDTH, 20);
                 ctx.fillStyle = '#fff';
                 ctx.fillText(currentData.mid_price.toFixed(currentData.digits), axisX + 4, currY + 4);
+
+                // 13. OVERLAYS (Legend, Badges)
+                // Legend (Top Left)
+                const legendX = 10; const legendY = 10;
+
+                // Badge: High Vol (Yellow)
+                ctx.fillStyle = 'rgba(250, 204, 21, 0.2)';
+                ctx.strokeStyle = '#facc15';
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.roundRect(legendX, legendY, 80, 24, 4); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#facc15'; ctx.font = 'bold 11px Inter';
+                ctx.fillText('⚡ High Vol', legendX + 24, legendY + 16);
+                ctx.beginPath(); ctx.arc(legendX + 12, legendY + 12, 4, 0, Math.PI * 2); ctx.fill();
+
+                // Badge: Whale (White)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.strokeStyle = '#ffffff';
+                ctx.beginPath(); ctx.roundRect(legendX + 90, legendY, 100, 24, 4); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('🐋 Whale Wall', legendX + 114, legendY + 16);
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(legendX + 102, legendY + 12, 4, 0, Math.PI * 2); ctx.fill();
+
+                // Symbol Badge (Top Right)
+                const symX = HISTORY_WIDTH - 80;
+                ctx.fillStyle = '#3b82f6';
+                ctx.beginPath(); ctx.roundRect(symX, 10, 70, 24, 4); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter';
+                ctx.fillText(currentData.symbol || 'XAUUSD', symX + 10, 26);
 
             } catch (err) {
                 console.error("[Heatmap Render Error]", err);
