@@ -1397,12 +1397,13 @@
         // ============================================================================
         // WEBSOCKET
         // ============================================================================
-                // ============================================================================
+        // ============================================================================
         // BINANCE WEBSOCKET INTEGRATION (Direct Feed)
         // ============================================================================
-        
-        const BINANCE_STREAM_URL = 'wss://stream.binance.com:9443/stream?streams=btcusdt@depth20@100ms/paxgusdt@depth20@100ms';
-        
+
+        // Try Port 443 (Standard) instead of 9443 to reduce firewall issues
+        const BINANCE_STREAM_URL = 'wss://stream.binance.com:443/stream?streams=btcusdt@depth20@100ms/paxgusdt@depth20@100ms';
+
         // Symbol Mapping
         const SYMBOL_MAP = {
             'PAXGUSDT': { name: 'GOLD (PAXG)', digits: 2, minVol: 0.01 },
@@ -1422,6 +1423,8 @@
                     state.reconnectAttempts = 0;
                     updateStatus('connected');
                     console.log("Binance WS Connected");
+                    // Clear error msg if any
+                    elements.statusText.style.color = '#22c55e';
                 };
 
                 state.ws.onclose = () => {
@@ -1433,6 +1436,9 @@
                 state.ws.onerror = (e) => {
                     console.error('WebSocket error:', e);
                     updateStatus('error');
+                    // Explicit hint for Indo users
+                    elements.statusText.textContent = 'Connection Blocked? TRY VPN / DNS 1.1.1.1';
+                    elements.statusText.style.color = '#ef4444';
                 };
 
                 state.ws.onmessage = (e) => {
@@ -1460,22 +1466,22 @@
         function handleBinanceMessage(streamName, data) {
             // streamName example: "btcusdt@depth20@100ms"
             const rawSymbol = streamName.split('@')[0].toUpperCase(); // BTCUSDT
-            
+
             // Map to our internal symbol if needed, currently 1:1
             const symbol = rawSymbol;
 
             // Only process if it matches selected symbol ?? 
             // Better: Store in state.domData and update if current.
             // But we need to normalize the data first.
-            
+
             const normalizedData = normalizeBinanceData(symbol, data);
-            
+
             state.domData[symbol] = normalizedData;
 
             if (symbol === state.currentSymbol) {
                 // Update Global Current Data
                 currentData = normalizedData;
-                
+
                 // Render
                 renderDOM(currentData);
                 drawHeatmap(currentData);
@@ -1485,9 +1491,9 @@
         function normalizeBinanceData(symbol, data) {
             // Binance Depth Snapshot: { bids: [], asks: [] }
             // We need to convert to our internal format
-            
+
             const digits = SYMBOL_MAP[symbol] ? SYMBOL_MAP[symbol].digits : 2;
-            
+
             const processLevels = (levels) => {
                 return levels.map(l => ({
                     price: parseFloat(l[0]),
@@ -1497,7 +1503,7 @@
 
             const bids = processLevels(data.bids);
             const asks = processLevels(data.asks);
-            
+
             const bestBid = bids.length > 0 ? bids[0].price : 0;
             const bestAsk = asks.length > 0 ? asks[0].price : 0;
             const mid = (bestBid + bestAsk) / 2;
@@ -1512,7 +1518,7 @@
                 digits: digits,
                 bids: bids,
                 asks: asks,
-                max_volume: Math.max(...bids.map(b=>b.volume), ...asks.map(a=>a.volume)),
+                max_volume: Math.max(...bids.map(b => b.volume), ...asks.map(a => a.volume)),
                 // Fake Analysis/Signal for now (or simple calculations)
                 analysis: {
                     direction: spread < 0.5 ? 'NEUTRAL' : (bestAsk > mid ? 'BULLISH' : 'BEARISH'), // Dummy
@@ -1539,7 +1545,7 @@
             // Create Tabs Hardcoded
             elements.tabs.innerHTML = '';
             const symbols = ['PAXGUSDT', 'BTCUSDT'];
-            
+
             symbols.forEach((symbol, i) => {
                 const tab = document.createElement('button');
                 tab.className = 'tab' + (i === 0 ? ' active' : '');
@@ -1550,7 +1556,7 @@
 
             // Select Default
             selectSymbol(symbols[0]); // Default to GOLD (PAXG)
-            
+
             // Connect
             connectBinance();
         }
@@ -1573,7 +1579,7 @@
         }
 
         function selectSymbol(symbol) {
-             if (state.currentSymbol !== symbol) {
+            if (state.currentSymbol !== symbol) {
                 state.history = [];
                 state.wallHistory.clear();
                 heatmap.initialized = false;
@@ -1585,7 +1591,7 @@
                 const name = SYMBOL_MAP[symbol].name;
                 t.classList.toggle('active', t.textContent === name);
             });
-            
+
             // Force redraw if data exists
             if (state.domData[symbol]) {
                 currentData = state.domData[symbol];
