@@ -1854,19 +1854,51 @@
                 const HISTORY_WIDTH = CHART_WIDTH - LAYOUT.FUTURE_WIDTH;
                 const CHART_HEIGHT = height - LAYOUT.BOTTOM_MARGIN;
 
-                // 4. Calculate Screen Transforms (Y-Axis) - STICKY CAMERA (DEADZONE)
-                // Logic: Camera stays still (sticky) while price moves in the middle 60% (Deadzone).
-                // Camera only pans when price hits the edges (Top 20% or Bottom 20%).
-                
+                // 4. Calculate Screen Transforms (Y-Axis) - ADAPTIVE STICKY CHART
+                // Logic: 
+                // 1. Calculate Volatility (Max-Min of recent history).
+                // 2. Set Zoom Window based on Volatility (Adaptive).
+                // 3. Apply Sticky Camera (Deadzone) to this window.
+
                 const currentMid = currentData.mid_price;
                 if (!currentMid || currentMid <= 0) return;
 
-                // Define Fixed Zoom Height (e.g., 15 Spreads) for consistent scale
+                // A. Calculate Volatility (Last 60 ticks)
+                let volMin = currentMid;
+                let volMax = currentMid;
+                const recentPoints = state.history.slice(-60);
+                
+                recentPoints.forEach(p => {
+                    const price = p.orderBook.mid_price;
+                    if (price > 0) {
+                        if (price < volMin) volMin = price;
+                        if (price > volMax) volMax = price;
+                    }
+                });
+                
+                let volatility = volMax - volMin;
+                
+                // B. Determine Zoom Range (Window Height)
                 const spread = (currentData.asks[0]?.price || currentMid) - (currentData.bids[0]?.price || currentMid);
                 const safeSpread = spread > 0 ? spread : currentMid * 0.0001;
-                const fixedRange = safeSpread * 15; // Fixed height of the view window (15 spreads)
+                
+                // Rule 1: Minimum Zoom = 20 Spreads (Prevent hyper-zoom on flat market)
+                const minZoom = safeSpread * 20;
+                
+                // Rule 2: Adaptive Zoom = 1.5x Volatility (Fit recent action comfortably)
+                let targetRange = volatility * 1.5;
+                
+                // Rule 3: Apply Limits
+                if (targetRange < minZoom) targetRange = minZoom;
+                
+                // Rule 4: Maximum Zoom (Sanity check, e.g. 1% of price)
+                const maxZoom = currentMid * 0.01; 
+                if (targetRange > maxZoom) targetRange = maxZoom;
 
-                // Initialize Camera if needed
+                // State persistence for smooth zoom transition (optional, strictly jumping for now)
+                const fixedRange = targetRange; 
+
+                // C. Initialize Camera if needed
                 if (!state.camera) {
                     state.camera = {
                         min: currentMid - (fixedRange / 2),
@@ -1874,16 +1906,27 @@
                     };
                 }
 
-                // Deadzone Logic:
-                // Safe Zone is 20% to 80% of the screen.
+                // D. Sticky Camera / Deadzone Logic
                 let camMin = state.camera.min;
                 let camMax = state.camera.max;
+                
+                // Resize camera smoothly if range changed significantly (optional, simply recenter for now)
+                const currentCamRange = camMax - camMin;
+                if (Math.abs(currentCamRange - fixedRange) > fixedRange * 0.5) {
+                    // unexpected range change (e.g. symbol switch or massive volatility spike) -> Reset
+                    camMin = currentMid - (fixedRange / 2);
+                    camMax = currentMid + (fixedRange / 2);
+                } else {
+                    // Adjust size to target (smoothly or instant) -> Instant for responsiveness
+                    const center = (camMin + camMax) / 2;
+                    camMin = center - (fixedRange / 2);
+                    camMax = center + (fixedRange / 2);
+                }
 
-                // Check boundaries
+                // Check boundaries (Deadzone 20%-80%)
                 const distFromMin = currentMid - camMin; // Distance from bottom
                 const distFromMax = camMax - currentMid; // Distance from top
-
-                const deadzoneBuffer = fixedRange * 0.2; // 20% top/bottom buffer
+                const deadzoneBuffer = fixedRange * 0.2; // 20% buffer
 
                 if (distFromMin < deadzoneBuffer) {
                     // Hit Bottom Buffer -> Shift Camera Down
@@ -1897,7 +1940,7 @@
                     camMax += shift;
                 }
                 
-                // Update State and Layout
+                // Update State
                 state.camera.min = camMin;
                 state.camera.max = camMax;
 
