@@ -1854,11 +1854,7 @@
                 const HISTORY_WIDTH = CHART_WIDTH - LAYOUT.FUTURE_WIDTH;
                 const CHART_HEIGHT = height - LAYOUT.BOTTOM_MARGIN;
 
-                // 4. Calculate Screen Transforms (Y-Axis) - LIQUIDITY AWARE + SAFETY CLAMP
-                // Logic: 
-                // 1. Scan Top 15 Order Book Levels.
-                // 2. Scan Recent History.
-                // 3. SAFETY CLAMP: Never zoom out more than 0.2% deviation (Anti-Jauh).
+                // 4. Calculate Screen Transforms (Y-Axis) - LIQUIDITY AWARE + SAFETY CLAMP + NAN FIX
                 
                 let minPrice = Infinity;
                 let maxPrice = -Infinity;
@@ -1866,8 +1862,15 @@
                 const currentMid = currentData.mid_price;
                 if (!currentMid || currentMid <= 0) return;
 
+                // Robust Spread Calculation (Prevents NaN)
+                // If bids/asks are missing, fallback to 0.01% of price
+                const bestAsk = currentData.asks && currentData.asks.length > 0 ? currentData.asks[0].price : currentMid;
+                const bestBid = currentData.bids && currentData.bids.length > 0 ? currentData.bids[0].price : currentMid;
+                let spread = bestAsk - bestBid;
+                if (spread <= 0 || isNaN(spread)) spread = currentMid * 0.0001;
+
+
                 // A. Scan Order Book (Liquidity Range)
-                // Tighter Focus: Only top 15 levels
                 const depthTarget = 15; 
                 
                 let bookMin = currentMid * 0.9995; 
@@ -1885,7 +1888,7 @@
                     bookMax = currentData.asks[currentData.asks.length - 1].price;
                 }
 
-                // B. Scan Recent History (Volatility Range)
+                // B. Scan Recent History
                 let histMin = currentMid;
                 let histMax = currentMid;
                 const recentPoints = state.history.slice(-60); 
@@ -1893,7 +1896,7 @@
                 if (recentPoints.length > 0) {
                     recentPoints.forEach(p => {
                         const price = p.orderBook.mid_price;
-                        if (price > 0) {
+                        if (price > 0 && !isNaN(price)) {
                             if (price < histMin) histMin = price;
                             if (price > histMax) histMax = price;
                         }
@@ -1904,27 +1907,23 @@
                 let targetMin = Math.min(bookMin, histMin);
                 let targetMax = Math.max(bookMax, histMax);
                 
-                // SAFETY CLAMP: 
-                // Max Deviation = 0.2% of price. (e.g. BTC $180 range, Gold $5 range)
+                // SAFETY CLAMP: Max Deviation = 0.2%
                 const maxDev = currentMid * 0.002; 
                 
                 if (targetMin < currentMid - maxDev) targetMin = currentMid - maxDev;
                 if (targetMax > currentMid + maxDev) targetMax = currentMid + maxDev;
 
-                // Add small padding (e.g. 5%)
                 const range = targetMax - targetMin;
                 const paddedRange = range * 1.05; 
                 
-                // Sanity Check: Tiny Min (BTC 0.05% rule)
-                const minRange = Math.max(
-                    (currentData.asks[0]?.price - currentData.bids[0]?.price) * 10, 
-                    currentMid * 0.0005
-                );
+                // Sanity Check: Tiny Min (BTC 0.05% rule OR 20x Spread)
+                const minRange = Math.max(spread * 20, currentMid * 0.0005);
                 
                 const safeRange = Math.max(paddedRange, minRange);
 
                 // D. Sticky Camera Logic
-                if (!state.camera) {
+                // Ensure state.camera has valid numbers (No NaNs)
+                if (!state.camera || isNaN(state.camera.min) || isNaN(state.camera.max)) {
                     state.camera = {
                         min: currentMid - (safeRange / 2),
                         max: currentMid + (safeRange / 2)
@@ -1935,16 +1934,22 @@
                 let camMax = state.camera.max;
                 let currentCamHeight = camMax - camMin;
 
+                // Double check validity
+                if (isNaN(currentCamHeight) || currentCamHeight <= 0) {
+                     currentCamHeight = safeRange;
+                     camMin = currentMid - (safeRange / 2);
+                     camMax = currentMid + (safeRange / 2);
+                }
+
                 // 1. Smoothly Adjust Height
                 if (Math.abs(currentCamHeight - safeRange) > currentMid * 0.0000001) { 
                     currentCamHeight = currentCamHeight + (safeRange - currentCamHeight) * 0.1;
                 }
                 
-                // 2. Deadzone / Pan Logic relative to MID
+                // 2. Deadzone / Pan Logic
                 const halfHeight = currentCamHeight / 2;
                 const buffer = currentCamHeight * 0.15; 
                 
-                // Check if Current Price is pushing edges
                 if (currentMid > camMax - buffer) {
                     const shift = currentMid - (camMax - buffer);
                     camMin += shift;
@@ -1955,7 +1960,7 @@
                     camMax -= shift;
                 }
                 
-                // Force Expand if data is outside (but respected clamp)
+                // Force Expand
                 if (targetMin < camMin) camMin = targetMin;
                 if (targetMax > camMax) camMax = targetMax;
 
@@ -1968,7 +1973,8 @@
                 maxPrice = camMax;
 
                 // Safety
-                if (minPrice < 0) minPrice = 0;
+                if (isNaN(minPrice) || minPrice < 0) minPrice = currentMid * 0.999;
+                if (isNaN(maxPrice) || maxPrice <= minPrice) maxPrice = minPrice * 1.002;
 
                 // 4c. Volume Stats (Only considering visible range)
                 let maxVol = 0;
