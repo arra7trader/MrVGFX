@@ -1391,25 +1391,37 @@
                 state.ws.close();
             }
             state.reconnectAttempts = 0;
-            connectWebSocket();
+            initApp();
         }
 
         // ============================================================================
         // WEBSOCKET
         // ============================================================================
-        function connectWebSocket() {
-            updateStatus('connecting');
+                // ============================================================================
+        // BINANCE WEBSOCKET INTEGRATION (Direct Feed)
+        // ============================================================================
+        
+        const BINANCE_STREAM_URL = 'wss://stream.binance.com:9443/stream?streams=btcusdt@depth20@100ms/paxgusdt@depth20@100ms';
+        
+        // Symbol Mapping
+        const SYMBOL_MAP = {
+            'PAXGUSDT': { name: 'GOLD (PAXG)', digits: 2, minVol: 0.01 },
+            'BTCUSDT': { name: 'BITCOIN', digits: 2, minVol: 0.001 }
+        };
 
-            const wsUrl = CONFIG.wsUrl;
-            console.log('Connecting to:', wsUrl);
+        function connectBinance() {
+            updateStatus('connecting');
+            console.log('Connecting to Binance:', BINANCE_STREAM_URL);
 
             try {
-                state.ws = new WebSocket(wsUrl);
+                if (state.ws) state.ws.close();
+                state.ws = new WebSocket(BINANCE_STREAM_URL);
 
                 state.ws.onopen = () => {
                     state.connected = true;
                     state.reconnectAttempts = 0;
                     updateStatus('connected');
+                    console.log("Binance WS Connected");
                 };
 
                 state.ws.onclose = () => {
@@ -1423,7 +1435,13 @@
                     updateStatus('error');
                 };
 
-                state.ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+                state.ws.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    // Binance Combined Stream format: { stream: "...", data: {...} }
+                    if (msg.stream) {
+                        handleBinanceMessage(msg.stream, msg.data);
+                    }
+                };
             } catch (e) {
                 console.error('Failed to create WebSocket:', e);
                 updateStatus('error');
@@ -1436,56 +1454,126 @@
                 return;
             }
             state.reconnectAttempts++;
-            setTimeout(connectWebSocket, CONFIG.reconnectDelay);
+            setTimeout(connectBinance, 2000);
+        }
+
+        function handleBinanceMessage(streamName, data) {
+            // streamName example: "btcusdt@depth20@100ms"
+            const rawSymbol = streamName.split('@')[0].toUpperCase(); // BTCUSDT
+            
+            // Map to our internal symbol if needed, currently 1:1
+            const symbol = rawSymbol;
+
+            // Only process if it matches selected symbol ?? 
+            // Better: Store in state.domData and update if current.
+            // But we need to normalize the data first.
+            
+            const normalizedData = normalizeBinanceData(symbol, data);
+            
+            state.domData[symbol] = normalizedData;
+
+            if (symbol === state.currentSymbol) {
+                // Update Global Current Data
+                currentData = normalizedData;
+                
+                // Render
+                renderDOM(currentData);
+                drawHeatmap(currentData);
+            }
+        }
+
+        function normalizeBinanceData(symbol, data) {
+            // Binance Depth Snapshot: { bids: [], asks: [] }
+            // We need to convert to our internal format
+            
+            const digits = SYMBOL_MAP[symbol] ? SYMBOL_MAP[symbol].digits : 2;
+            
+            const processLevels = (levels) => {
+                return levels.map(l => ({
+                    price: parseFloat(l[0]),
+                    volume: parseFloat(l[1])
+                }));
+            };
+
+            const bids = processLevels(data.bids);
+            const asks = processLevels(data.asks);
+            
+            const bestBid = bids.length > 0 ? bids[0].price : 0;
+            const bestAsk = asks.length > 0 ? asks[0].price : 0;
+            const mid = (bestBid + bestAsk) / 2;
+            const spread = bestAsk - bestBid;
+
+            return {
+                symbol: symbol,
+                mid_price: mid,
+                bid: bestBid,
+                ask: bestAsk,
+                spread_pips: (spread * (digits === 2 ? 100 : 10000)).toFixed(1),
+                digits: digits,
+                bids: bids,
+                asks: asks,
+                max_volume: Math.max(...bids.map(b=>b.volume), ...asks.map(a=>a.volume)),
+                // Fake Analysis/Signal for now (or simple calculations)
+                analysis: {
+                    direction: spread < 0.5 ? 'NEUTRAL' : (bestAsk > mid ? 'BULLISH' : 'BEARISH'), // Dummy
+                    confidence: 85,
+                    buy_pressure: 50,
+                    sell_pressure: 50,
+                    support_price: mid * 0.99,
+                    resistance_price: mid * 1.01,
+                    support_volume: 500,
+                    resistance_volume: 500
+                },
+                signal: {
+                    type: 'WAIT',
+                    strength: 0,
+                    ready_to_trade: false,
+                    trend: 'SIDEWAYS',
+                    trend_arrow: '↔',
+                    checklist: {}
+                }
+            };
+        }
+
+        function initApp() {
+            // Create Tabs Hardcoded
+            elements.tabs.innerHTML = '';
+            const symbols = ['PAXGUSDT', 'BTCUSDT'];
+            
+            symbols.forEach((symbol, i) => {
+                const tab = document.createElement('button');
+                tab.className = 'tab' + (i === 0 ? ' active' : '');
+                tab.textContent = SYMBOL_MAP[symbol].name;
+                tab.onclick = () => selectSymbol(symbol);
+                elements.tabs.appendChild(tab);
+            });
+
+            // Select Default
+            selectSymbol(symbols[0]); // Default to GOLD (PAXG)
+            
+            // Connect
+            connectBinance();
         }
 
         function updateStatus(status) {
+            if (!elements.statusDot) return;
             elements.statusDot.classList.remove('live');
             switch (status) {
-                case 'connecting': elements.statusText.textContent = 'Connecting...'; break;
+                case 'connecting': elements.statusText.textContent = 'Connecting via Binance...'; break;
                 case 'connected':
                     elements.statusDot.classList.add('live');
-                    elements.statusText.textContent = 'Live';
+                    elements.statusText.textContent = 'Binance Stream Live';
                     break;
                 case 'disconnected': elements.statusText.textContent = 'Reconnecting...'; break;
                 case 'error':
                 case 'failed':
-                    elements.statusText.textContent = 'Connection Error - Check Settings';
+                    elements.statusText.textContent = 'Connection Error';
                     break;
             }
-        }
-
-        function handleMessage(data) {
-            switch (data.type) {
-                case 'SYMBOL_LIST':
-                    state.symbols = data.data;
-                    createTabs(data.data);
-                    if (data.data.length > 0) selectSymbol(data.data[0]);
-                    break;
-                case 'DOM_DATA':
-                    state.domData[data.symbol] = data;
-                    if (data.symbol === state.currentSymbol) {
-                        renderDOM(data);
-                        drawHeatmap(data); // Hook Heatmap Update
-                    }
-                    break;
-            }
-        }
-
-        function createTabs(symbols) {
-            elements.tabs.innerHTML = '';
-            symbols.forEach((symbol, i) => {
-                const tab = document.createElement('button');
-                tab.className = 'tab' + (i === 0 ? ' active' : '');
-                tab.textContent = symbol;
-                tab.onclick = () => selectSymbol(symbol);
-                elements.tabs.appendChild(tab);
-            });
         }
 
         function selectSymbol(symbol) {
-            // Reset Heatmap Data if symbol changed
-            if (state.currentSymbol !== symbol) {
+             if (state.currentSymbol !== symbol) {
                 state.history = [];
                 state.wallHistory.clear();
                 heatmap.initialized = false;
@@ -1493,21 +1581,19 @@
             state.currentSymbol = symbol;
 
             document.querySelectorAll('.tab').forEach(t => {
-                t.classList.toggle('active', t.textContent === symbol);
+                // Determine name
+                const name = SYMBOL_MAP[symbol].name;
+                t.classList.toggle('active', t.textContent === name);
             });
-
-            // Send SUBSCRIBE message to server
-            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-                state.ws.send(JSON.stringify({
-                    type: 'SUBSCRIBE',
-                    symbol: symbol
-                }));
-            }
-
+            
+            // Force redraw if data exists
             if (state.domData[symbol]) {
-                renderDOM(state.domData[symbol]);
+                currentData = state.domData[symbol];
+                renderDOM(currentData);
+                drawHeatmap(currentData);
             }
         }
+
 
         function renderDOM(data) {
             elements.mainPrice.textContent = formatPrice(data.mid_price, data.digits);
@@ -1724,7 +1810,7 @@
         // ============================================================================
         // INIT
         // ============================================================================
-        connectWebSocket();
+        initApp();
         // ============================================
         // ADVANCED BOOKMAP / HEATMAP LOGIC (REPLICA)
         // ============================================
