@@ -1860,6 +1860,9 @@
                 // 2. Scan Recent History.
                 // 3. SAFETY CLAMP: Never zoom out more than 0.2% deviation (Anti-Jauh).
                 
+                let minPrice = Infinity;
+                let maxPrice = -Infinity;
+                
                 const currentMid = currentData.mid_price;
                 if (!currentMid || currentMid <= 0) return;
 
@@ -1903,7 +1906,6 @@
                 
                 // SAFETY CLAMP: 
                 // Max Deviation = 0.2% of price. (e.g. BTC $180 range, Gold $5 range)
-                // If the target tries to go further, we CUT IT OFF.
                 const maxDev = currentMid * 0.002; 
                 
                 if (targetMin < currentMid - maxDev) targetMin = currentMid - maxDev;
