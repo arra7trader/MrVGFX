@@ -1854,40 +1854,38 @@
                 const HISTORY_WIDTH = CHART_WIDTH - LAYOUT.FUTURE_WIDTH;
                 const CHART_HEIGHT = height - LAYOUT.BOTTOM_MARGIN;
 
-                // 4. Calculate Screen Transforms (Y-Axis) - LIQUIDITY AWARE AUTO-ZOOM
+                // 4. Calculate Screen Transforms (Y-Axis) - LIQUIDITY AWARE + SAFETY CLAMP
                 // Logic: 
-                // 1. Scan Order Book Depth to find "populated" price range (e.g., 20th level).
-                // 2. Scan Recent Price History (60 ticks) to catch volatility.
-                // 3. Merge ranges so screen is always full of DATA, not empty space.
+                // 1. Scan Top 15 Order Book Levels.
+                // 2. Scan Recent History.
+                // 3. SAFETY CLAMP: Never zoom out more than 0.2% deviation (Anti-Jauh).
                 
                 const currentMid = currentData.mid_price;
                 if (!currentMid || currentMid <= 0) return;
 
                 // A. Scan Order Book (Liquidity Range)
-                // We want to make sure we see at least X levels of depth
-                const depthTarget = 20; // Show top 20 bids/asks
+                // Tighter Focus: Only top 15 levels
+                const depthTarget = 15; 
                 
-                let bookMin = currentMid * 0.9995; // default fallback
-                let bookMax = currentMid * 1.0005; // default fallback
+                let bookMin = currentMid * 0.9995; 
+                let bookMax = currentMid * 1.0005; 
 
                 if (currentData.bids && currentData.bids.length >= depthTarget) {
                     bookMin = currentData.bids[depthTarget-1].price;
                 } else if (currentData.bids && currentData.bids.length > 0) {
-                    // if less than target, take the lowest valid bid
                     bookMin = currentData.bids[currentData.bids.length - 1].price;
                 }
 
                 if (currentData.asks && currentData.asks.length >= depthTarget) {
                     bookMax = currentData.asks[depthTarget-1].price;
                 } else if (currentData.asks && currentData.asks.length > 0) {
-                     // if less than target, take the highest valid ask
                     bookMax = currentData.asks[currentData.asks.length - 1].price;
                 }
 
                 // B. Scan Recent History (Volatility Range)
                 let histMin = currentMid;
                 let histMax = currentMid;
-                const recentPoints = state.history.slice(-60); // Last 60 ticks
+                const recentPoints = state.history.slice(-60); 
                 
                 if (recentPoints.length > 0) {
                     recentPoints.forEach(p => {
@@ -1899,22 +1897,31 @@
                     });
                 }
 
-                // C. Merge Ranges (Union)
-                // We want to show everything: Current Depth AND Recent History
+                // C. Merge & CLAMP
                 let targetMin = Math.min(bookMin, histMin);
                 let targetMax = Math.max(bookMax, histMax);
                 
-                // Add small padding (e.g. 5%) so items aren't glued to edge
-                const range = targetMax - targetMin;
-                const paddedRange = range * 1.05; // 5% padding
+                // SAFETY CLAMP: 
+                // Max Deviation = 0.2% of price. (e.g. BTC $180 range, Gold $5 range)
+                // If the target tries to go further, we CUT IT OFF.
+                const maxDev = currentMid * 0.002; 
                 
-                // Sanity Check: If range is 0 (broken data), enforce tiny min
-                const safeRange = paddedRange > 0 ? paddedRange : currentMid * 0.0005;
+                if (targetMin < currentMid - maxDev) targetMin = currentMid - maxDev;
+                if (targetMax > currentMid + maxDev) targetMax = currentMid + maxDev;
+
+                // Add small padding (e.g. 5%)
+                const range = targetMax - targetMin;
+                const paddedRange = range * 1.05; 
+                
+                // Sanity Check: Tiny Min (BTC 0.05% rule)
+                const minRange = Math.max(
+                    (currentData.asks[0]?.price - currentData.bids[0]?.price) * 10, 
+                    currentMid * 0.0005
+                );
+                
+                const safeRange = Math.max(paddedRange, minRange);
 
                 // D. Sticky Camera Logic
-                // We calculate the IDEAL window size (safeRange) and anchor it
-                
-                // Initialize Camera
                 if (!state.camera) {
                     state.camera = {
                         min: currentMid - (safeRange / 2),
@@ -1926,43 +1933,27 @@
                 let camMax = state.camera.max;
                 let currentCamHeight = camMax - camMin;
 
-                // 1. Smoothly Adjust Height to Target
-                // If the target range expands (volatility spike), expand camera fast.
-                // If target range shrinks (market calm), shrink camera slow.
-                
+                // 1. Smoothly Adjust Height
                 if (Math.abs(currentCamHeight - safeRange) > currentMid * 0.0000001) { 
-                    // Simple "Lerp" for height (0.1 speed)
                     currentCamHeight = currentCamHeight + (safeRange - currentCamHeight) * 0.1;
                 }
                 
                 // 2. Deadzone / Pan Logic relative to MID
-                // We construct the new camera window based on Current Mid but allowing "drift"
-                
-                // Effective Camera Window
                 const halfHeight = currentCamHeight / 2;
-                let desiredMin = currentMid - halfHeight;
-                let desiredMax = currentMid + halfHeight;
-                
-                // Apply "Sticky" - only move if we really need to (Deadzone)
-                // Using a simpler logic: Target fits nicely within Current Camera? If yes, don't move.
-                
-                const buffer = currentCamHeight * 0.15; // 15% buffer
+                const buffer = currentCamHeight * 0.15; 
                 
                 // Check if Current Price is pushing edges
                 if (currentMid > camMax - buffer) {
-                    // Pushing top -> Move Up
                     const shift = currentMid - (camMax - buffer);
                     camMin += shift;
                     camMax += shift;
                 } else if (currentMid < camMin + buffer) {
-                    // Pushing bottom -> Move Down
                     const shift = (camMin + buffer) - currentMid;
                     camMin -= shift;
                     camMax -= shift;
                 }
                 
-                // Also: If the calculated 'targetMin/Max' (the data we MUST see) is outside, Force Expand
-                // This guarantees "No Empty Space" if data exists outside
+                // Force Expand if data is outside (but respected clamp)
                 if (targetMin < camMin) camMin = targetMin;
                 if (targetMax > camMax) camMax = targetMax;
 
