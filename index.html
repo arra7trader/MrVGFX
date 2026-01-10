@@ -1398,18 +1398,20 @@
         // WEBSOCKET
         // ============================================================================
         // ============================================================================
-        // BINANCE WEBSOCKET INTEGRATION (Auto-Rotate Mirrors - Anti Block)
+        // ============================================================================
+        // BINANCE INTEGRATION: HYBRID (WS + HTTP PROXY FALLBACK)
         // ============================================================================
 
-        // List of available endpoints to try (Round-Robin) to bypass ISP block
         const BINANCE_ENDPOINTS = [
-            'wss://data-stream.binance.com/stream', // AWS CloudFront (Often Unblocked)
-            'wss://stream.binance.com:443/stream',  // Standard SSL
-            'wss://stream.binance.com:9443/stream', // Default Port
-            'wss://fstream.binance.com/stream'      // Futures API Mirror
+            'wss://data-stream.binance.com/stream',
+            'wss://stream.binance.com:443/stream',
+            'wss://fstream.binance.com/stream'
         ];
 
         let currentEndpointIdx = 0;
+        let useHttpFallback = false;
+        let pollingInterval = null;
+
         const STREAMS_PARAM = '?streams=btcusdt@depth20@100ms/paxgusdt@depth20@100ms';
 
         // Symbol Mapping
@@ -1419,6 +1421,11 @@
         };
 
         function connectBinance() {
+            if (useHttpFallback) {
+                startHttpPolling();
+                return;
+            }
+
             // Get current URL
             const baseUrl = BINANCE_ENDPOINTS[currentEndpointIdx];
             const finalUrl = baseUrl + STREAMS_PARAM;
@@ -1426,9 +1433,8 @@
             updateStatus('connecting');
             console.log(`[Binance] Connecting to Mirror ${currentEndpointIdx + 1}/${BINANCE_ENDPOINTS.length}: ${baseUrl}`);
 
-            // Show user which mirror is being tried
-            elements.statusText.textContent = `Trying Mirror ${currentEndpointIdx + 1}...`;
-            elements.statusText.style.color = '#fbbf24'; // Yellow
+            elements.statusText.textContent = `Trying Mirror ${currentEndpointIdx + 1} (WS)...`;
+            elements.statusText.style.color = '#fbbf24';
 
             try {
                 if (state.ws) {
@@ -1437,22 +1443,20 @@
 
                 state.ws = new WebSocket(finalUrl);
 
-                // CONNECTION TIMEOUT: If silent block (hangs), force rotate
+                // CONNECTION TIMEOUT: Force rotate or switch to HTTP
                 const connectionTimeout = setTimeout(() => {
                     if (state.ws.readyState !== WebSocket.OPEN) {
                         console.warn("[Binance] Connection Timed Out -> Rotating");
-                        state.ws.close(); // Triggers onclose -> rotate
+                        state.ws.close();
                     }
-                }, 5000);
+                }, 4000);
 
                 state.ws.onopen = () => {
                     clearTimeout(connectionTimeout);
                     state.connected = true;
                     state.reconnectAttempts = 0;
                     updateStatus('connected');
-                    console.log("Binance WS Connected via " + baseUrl);
-
-                    elements.statusText.textContent = `Live (Mirror ${currentEndpointIdx + 1})`;
+                    elements.statusText.textContent = `Live (WS Mirror ${currentEndpointIdx + 1})`;
                     elements.statusText.style.color = '#22c55e';
                 };
 
@@ -1461,16 +1465,21 @@
                     clearTimeout(connectionTimeout);
                     updateStatus('disconnected');
 
-                    // Rotate to next endpoint
-                    currentEndpointIdx = (currentEndpointIdx + 1) % BINANCE_ENDPOINTS.length;
-                    console.log(`[Binance] Disconnected/Blocked. Rotating to: ${BINANCE_ENDPOINTS[currentEndpointIdx]}`);
+                    // Rotate
+                    currentEndpointIdx++;
+                    if (currentEndpointIdx >= BINANCE_ENDPOINTS.length) {
+                        console.log("[Binance] All WS Mirrors Failed. Switching to HTTP Proxy.");
+                        useHttpFallback = true;
+                        connectBinance(); // Will trigger HTTP mode
+                        return;
+                    }
 
-                    scheduleReconnect();
+                    console.log(`[Binance] Rotating to: ${BINANCE_ENDPOINTS[currentEndpointIdx]}`);
+                    setTimeout(connectBinance, 1000);
                 };
 
                 state.ws.onerror = (e) => {
                     console.error('WebSocket error:', e);
-                    // Error will trigger onclose which handles rotation
                 };
 
                 state.ws.onmessage = (e) => {
@@ -1481,15 +1490,61 @@
                 };
             } catch (e) {
                 console.error('Failed to create WebSocket:', e);
-                // Try next immediately
-                currentEndpointIdx = (currentEndpointIdx + 1) % BINANCE_ENDPOINTS.length;
-                scheduleReconnect();
+                state.ws.onclose(); // Trigger rotation
             }
         }
 
+        // --- HTTP POLLING FALLBACK (ANTI-BLOCK) ---
+        function startHttpPolling() {
+            updateStatus('connecting');
+            elements.statusText.textContent = `Mode: HTTP Proxy (Anti-Block)`;
+            elements.statusText.style.color = '#f59e0b'; // Orange
+
+            if (pollingInterval) clearInterval(pollingInterval);
+
+            const poll = async () => {
+                try {
+                    // Use CORS Proxy to bypass local ISP block on api.binance.com
+                    // Only poll the CURRENT symbol to save bandwidth
+                    const symbol = state.currentSymbol;
+                    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(`https://api.binance.com/api/v3/depth?symbol=${symbol}&limit=20`);
+
+                    const res = await fetch(proxyUrl);
+                    if (!res.ok) throw new Error("Proxy Error");
+
+                    const data = await res.json();
+
+                    // Normalize (mock stream format)
+                    const normalized = normalizeBinanceData(symbol, {
+                        bids: data.bids,
+                        asks: data.asks
+                    });
+
+                    state.domData[symbol] = normalized;
+                    if (symbol === state.currentSymbol) {
+                        currentData = normalized;
+                        renderDOM(currentData);
+                        drawHeatmap(currentData);
+                    }
+
+                    state.connected = true;
+                    elements.statusText.textContent = 'Live (HTTP Proxy)';
+                    elements.statusText.style.color = '#22c55e';
+
+                } catch (e) {
+                    console.error("Polling Error:", e);
+                    state.connected = false;
+                    elements.statusText.textContent = 'Proxy Error - Retrying...';
+                    elements.statusText.style.color = '#ef4444';
+                }
+            };
+
+            poll(); // First run
+            pollingInterval = setInterval(poll, 1500); // 1.5s interval
+        }
+
         function scheduleReconnect() {
-            // Fast retry when rotating
-            setTimeout(connectBinance, 1500);
+            // Handled inside connectBinance logic now
         }
         // Cleaned up residual code
 
