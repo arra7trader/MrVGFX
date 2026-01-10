@@ -1408,6 +1408,12 @@
             'wss://fstream.binance.com/stream'
         ];
 
+        // Public Proxies to mimic the backend /api/ proxy
+        const HTTP_PROXIES = [
+            'https://corsproxy.io/?',
+            'https://api.allorigins.win/raw?url='
+        ];
+
         let currentEndpointIdx = 0;
         let useHttpFallback = false;
         let pollingInterval = null;
@@ -1443,13 +1449,17 @@
 
                 state.ws = new WebSocket(finalUrl);
 
-                // CONNECTION TIMEOUT: Force rotate or switch to HTTP
+                // CONNECTION TIMEOUT: 2000ms (Matched with Reference)
+                // If it hangs for 2s, assume blocked and switch fast
                 const connectionTimeout = setTimeout(() => {
                     if (state.ws.readyState !== WebSocket.OPEN) {
-                        console.warn("[Binance] Connection Timed Out -> Rotating");
+                        console.warn("[Binance] Connection Timed Out (2s) -> Switching to Proxy");
                         state.ws.close();
+                        // Force HTTP mode immediately if first mirror hangs (Aggressive)
+                        useHttpFallback = true;
+                        connectBinance();
                     }
-                }, 4000);
+                }, 2000);
 
                 state.ws.onopen = () => {
                     clearTimeout(connectionTimeout);
