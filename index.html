@@ -1976,24 +1976,26 @@
                 if (isNaN(minPrice) || minPrice < 0) minPrice = currentMid * 0.999;
                 if (isNaN(maxPrice) || maxPrice <= minPrice) maxPrice = minPrice * 1.002;
 
-                // 4c. Volume Stats (Only considering visible range)
-                let maxVol = 0;
-                let totalVol = 0;
-                let count = 0;
+                // 4c. Volume Stats (LOGARITHMIC SCALE)
+                // We use Log scale so small retail orders (ant) are visible vs whales (elephant)
+                let maxLogVol = 1; // avoid div by 0
+                let minLogVol = Infinity;
+                
+                // Helper to get Log Value
+                const getLog = (v) => Math.log(v + 1);
 
-                // Only scan levels within our visual range to normalize colors for *visible* liquidity
+                // Check visible range only
                 const scanLevels = (levels) => {
                     levels.forEach(l => {
-                        // Only count volume if inside vertical view
                         if (l.price >= minPrice && l.price <= maxPrice) {
-                            if (l.volume > maxVol) maxVol = l.volume;
-                            totalVol += l.volume;
-                            count++;
+                            const lv = getLog(l.volume);
+                            if (lv > maxLogVol) maxLogVol = lv;
+                            if (lv < minLogVol) minLogVol = lv;
                         }
                     });
                 };
 
-                // Scan just recent history for Volume color scaling (responsive)
+                // Scan Recent History
                 state.history.slice(-50).forEach(h => {
                     if (h.orderBook && h.orderBook.bids) scanLevels(h.orderBook.bids);
                     if (h.orderBook && h.orderBook.asks) scanLevels(h.orderBook.asks);
@@ -2007,8 +2009,22 @@
                 maxPrice += priceSpan * 0.1;
                 const displaySpan = maxPrice - minPrice;
 
-                const avgVol = count > 0 ? totalVol / count : 1;
-                const capVol = Math.max(maxVol, avgVol * 8);
+                // Color Normalizer (Logarithmic)
+                // We map [minLogVol, maxLogVol] -> [0, 1]
+                const logRange = maxLogVol - (minLogVol === Infinity ? 0 : minLogVol);
+                const safeLogRange = logRange > 0 ? logRange : 1;
+                const baseLog = (minLogVol === Infinity ? 0 : minLogVol);
+
+                const getIntensity = (vol) => {
+                     const lv = getLog(vol);
+                     // Normalize relative to the spread of volume seen on screen
+                     // Taking 0.4 as "floor" to cut off noise
+                     let val = (lv - baseLog) / safeLogRange;
+                     if (val < 0) val = 0;
+                     if (val > 1) val = 1;
+                     // Boost gamma slightly so small orders pop more
+                     return Math.pow(val, 0.7); 
+                };
 
                 const getY = (price) => {
                     if (!displaySpan) return CHART_HEIGHT / 2;
@@ -2030,7 +2046,6 @@
                 // 7. Render History
                 const points = state.history;
                 const availableWidth = HISTORY_WIDTH;
-                // Avoid divide by zero
                 const pointWidth = Math.max(2, availableWidth / Math.max(1, MAX_HISTORY));
 
                 // Draw from right to left
@@ -2039,31 +2054,26 @@
 
                 for (let i = startIdx; i < points.length; i++) {
                     const pt = points[i];
-                    // Index relative to end of history array (0 = oldest visible, visibleCount-1 = newest)
-                    // We want newest at HISTORY_WIDTH
-                    // let x = HISTORY_WIDTH - ((points.length - 1 - i) * pointWidth);
-
                     const offsetFromRight = (points.length - 1 - i);
                     const x = HISTORY_WIDTH - (offsetFromRight * pointWidth) - pointWidth;
 
                     // Asks
                     pt.orderBook.asks.forEach(ask => {
-                        if (ask.volume < avgVol * 0.1) return;
                         const y = getY(ask.price);
-                        const intensity = ask.volume / capVol;
+                        const intensity = getIntensity(ask.volume);
+                        if (intensity < 0.05) return; // Cutoff purely noise
                         ctx.fillStyle = getHeatmapColor(intensity);
                         ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(pointWidth) + 1, 3);
                     });
                     // Bids
                     pt.orderBook.bids.forEach(bid => {
-                        if (bid.volume < avgVol * 0.1) return;
                         const y = getY(bid.price);
-                        const intensity = bid.volume / capVol;
+                        const intensity = getIntensity(bid.volume);
+                        if (intensity < 0.05) return; // Cutoff purely noise
                         ctx.fillStyle = getHeatmapColor(intensity);
                         ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(pointWidth) + 1, 3);
                     });
                 }
-
                 // 8. Price Line
                 ctx.beginPath();
                 ctx.strokeStyle = '#ffffff';
