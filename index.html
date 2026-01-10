@@ -1855,10 +1855,10 @@
                 const CHART_HEIGHT = height - LAYOUT.BOTTOM_MARGIN;
 
                 // 4. Calculate Screen Transforms (Y-Axis) - LIQUIDITY AWARE + SAFETY CLAMP + NAN FIX
-                
+
                 let minPrice = Infinity;
                 let maxPrice = -Infinity;
-                
+
                 const currentMid = currentData.mid_price;
                 if (!currentMid || currentMid <= 0) return;
 
@@ -1871,19 +1871,19 @@
 
 
                 // A. Scan Order Book (Liquidity Range)
-                const depthTarget = 15; 
-                
-                let bookMin = currentMid * 0.9995; 
-                let bookMax = currentMid * 1.0005; 
+                const depthTarget = 15;
+
+                let bookMin = currentMid * 0.9995;
+                let bookMax = currentMid * 1.0005;
 
                 if (currentData.bids && currentData.bids.length >= depthTarget) {
-                    bookMin = currentData.bids[depthTarget-1].price;
+                    bookMin = currentData.bids[depthTarget - 1].price;
                 } else if (currentData.bids && currentData.bids.length > 0) {
                     bookMin = currentData.bids[currentData.bids.length - 1].price;
                 }
 
                 if (currentData.asks && currentData.asks.length >= depthTarget) {
-                    bookMax = currentData.asks[depthTarget-1].price;
+                    bookMax = currentData.asks[depthTarget - 1].price;
                 } else if (currentData.asks && currentData.asks.length > 0) {
                     bookMax = currentData.asks[currentData.asks.length - 1].price;
                 }
@@ -1891,8 +1891,8 @@
                 // B. Scan Recent History
                 let histMin = currentMid;
                 let histMax = currentMid;
-                const recentPoints = state.history.slice(-60); 
-                
+                const recentPoints = state.history.slice(-60);
+
                 if (recentPoints.length > 0) {
                     recentPoints.forEach(p => {
                         const price = p.orderBook.mid_price;
@@ -1906,19 +1906,19 @@
                 // C. Merge & CLAMP
                 let targetMin = Math.min(bookMin, histMin);
                 let targetMax = Math.max(bookMax, histMax);
-                
+
                 // SAFETY CLAMP: Max Deviation = 0.2%
-                const maxDev = currentMid * 0.002; 
-                
+                const maxDev = currentMid * 0.002;
+
                 if (targetMin < currentMid - maxDev) targetMin = currentMid - maxDev;
                 if (targetMax > currentMid + maxDev) targetMax = currentMid + maxDev;
 
                 const range = targetMax - targetMin;
-                const paddedRange = range * 1.05; 
-                
+                const paddedRange = range * 1.05;
+
                 // Sanity Check: Tiny Min (BTC 0.05% rule OR 20x Spread)
                 const minRange = Math.max(spread * 20, currentMid * 0.0005);
-                
+
                 const safeRange = Math.max(paddedRange, minRange);
 
                 // D. Sticky Camera Logic
@@ -1936,20 +1936,20 @@
 
                 // Double check validity
                 if (isNaN(currentCamHeight) || currentCamHeight <= 0) {
-                     currentCamHeight = safeRange;
-                     camMin = currentMid - (safeRange / 2);
-                     camMax = currentMid + (safeRange / 2);
+                    currentCamHeight = safeRange;
+                    camMin = currentMid - (safeRange / 2);
+                    camMax = currentMid + (safeRange / 2);
                 }
 
                 // 1. Smoothly Adjust Height
-                if (Math.abs(currentCamHeight - safeRange) > currentMid * 0.0000001) { 
+                if (Math.abs(currentCamHeight - safeRange) > currentMid * 0.0000001) {
                     currentCamHeight = currentCamHeight + (safeRange - currentCamHeight) * 0.1;
                 }
-                
+
                 // 2. Deadzone / Pan Logic
                 const halfHeight = currentCamHeight / 2;
-                const buffer = currentCamHeight * 0.15; 
-                
+                const buffer = currentCamHeight * 0.15;
+
                 if (currentMid > camMax - buffer) {
                     const shift = currentMid - (camMax - buffer);
                     camMin += shift;
@@ -1959,7 +1959,7 @@
                     camMin -= shift;
                     camMax -= shift;
                 }
-                
+
                 // Force Expand
                 if (targetMin < camMin) camMin = targetMin;
                 if (targetMax > camMax) camMax = targetMax;
@@ -1980,7 +1980,7 @@
                 // We use Log scale so small retail orders (ant) are visible vs whales (elephant)
                 let maxLogVol = 1; // avoid div by 0
                 let minLogVol = Infinity;
-                
+
                 // Helper to get Log Value
                 const getLog = (v) => Math.log(v + 1);
 
@@ -2016,14 +2016,14 @@
                 const baseLog = (minLogVol === Infinity ? 0 : minLogVol);
 
                 const getIntensity = (vol) => {
-                     const lv = getLog(vol);
-                     // Normalize relative to the spread of volume seen on screen
-                     // Taking 0.4 as "floor" to cut off noise
-                     let val = (lv - baseLog) / safeLogRange;
-                     if (val < 0) val = 0;
-                     if (val > 1) val = 1;
-                     // Boost gamma slightly so small orders pop more
-                     return Math.pow(val, 0.7); 
+                    const lv = getLog(vol);
+                    // Normalize relative to the spread of volume seen on screen
+                    // Taking 0.4 as "floor" to cut off noise
+                    let val = (lv - baseLog) / safeLogRange;
+                    if (val < 0) val = 0;
+                    if (val > 1) val = 1;
+                    // Boost gamma slightly so small orders pop more
+                    return Math.pow(val, 0.7);
                 };
 
                 const getY = (price) => {
@@ -2125,18 +2125,19 @@
                 ctx.setLineDash([]);
 
                 // Future Bars
+                // Future Bars (Fixed - Logarithmic)
                 const drawFutureBar = (level, type) => {
                     const y = getY(level.price);
-                    const intensity = level.volume / capVol;
-                    const barW = Math.min(LAYOUT.FUTURE_WIDTH * intensity * 1.5, LAYOUT.FUTURE_WIDTH - 20);
+                    const intensity = getIntensity(level.volume); // Use new Log function
+                    const barW = Math.min(LAYOUT.FUTURE_WIDTH * intensity * 1.8, LAYOUT.FUTURE_WIDTH - 5);
 
                     const g = ctx.createLinearGradient(futureX, 0, futureX + barW, 0);
                     if (type === 'ASK') {
-                        g.addColorStop(0, 'rgba(239, 68, 68, 0.8)');
-                        g.addColorStop(1, 'rgba(239, 68, 68, 0.1)');
+                        g.addColorStop(0, 'rgba(239, 68, 68, 0.9)');
+                        g.addColorStop(1, 'rgba(239, 68, 68, 0.2)');
                     } else {
-                        g.addColorStop(0, 'rgba(34, 197, 94, 0.8)');
-                        g.addColorStop(1, 'rgba(34, 197, 94, 0.1)');
+                        g.addColorStop(0, 'rgba(34, 197, 94, 0.9)');
+                        g.addColorStop(1, 'rgba(34, 197, 94, 0.2)');
                     }
                     ctx.fillStyle = g;
                     ctx.fillRect(futureX, y - 2, barW, 4);
@@ -2144,14 +2145,19 @@
                 currentData.asks.forEach(a => drawFutureBar(a, 'ASK'));
                 currentData.bids.forEach(b => drawFutureBar(b, 'BID'));
 
-                // 10. Whale Walls
-                const whaleThreshold = Math.max(avgVol * 2, maxVol * 0.4);
+                // 10. Whale Walls (Fixed - Logarithmic)
+                const whaleThreshold = 0.7; // Log Intensity > 0.7
 
                 const updateWall = (level, type) => {
-                    if (level.volume < avgVol * 1.5) return;
+                    const intensity = getIntensity(level.volume);
+                    if (intensity < 0.6) return;
+
                     const key = `${type}-${level.price.toFixed(currentData.digits || 2)}`;
                     const existing = state.wallHistory.get(key);
-                    const sizeClass = classifyOrderSize(level.volume, avgVol);
+
+                    let sizeClass = 'LARGE';
+                    if (intensity > 0.85) sizeClass = 'WHALE';
+                    else if (intensity > 0.95) sizeClass = 'INSTITUTIONAL';
 
                     if (existing) {
                         existing.lastSeen = now;
@@ -2172,26 +2178,28 @@
                 });
 
                 state.wallHistory.forEach(wall => {
-                    if (wall.volume < whaleThreshold) return;
+                    const intensity = getIntensity(wall.volume);
+                    if (intensity < whaleThreshold) return;
+
                     const ageMs = now - wall.firstSeen;
                     const ageSec = Math.floor(ageMs / 1000);
                     const y = getY(wall.price);
 
                     const alpha = Math.min(0.2 + (ageSec / 20) * 0.6, 0.8);
                     ctx.fillStyle = wall.type === 'ASK' ? `rgba(239, 68, 68, ${alpha})` : `rgba(34, 197, 94, ${alpha})`;
-                    ctx.fillRect(futureX, y - 8, LAYOUT.FUTURE_WIDTH, 16);
+                    ctx.fillRect(futureX, y - 9, LAYOUT.FUTURE_WIDTH, 18);
 
                     ctx.strokeStyle = wall.type === 'ASK' ? '#ef4444' : '#22c55e';
                     ctx.lineWidth = 2;
                     ctx.beginPath(); ctx.moveTo(futureX, y); ctx.lineTo(CHART_WIDTH, y); ctx.stroke();
 
-                    const icon = getSizeIcon(wall.sizeClass);
+                    const icon = wall.sizeClass === 'WHALE' ? '🐳' : '🦈';
                     let label = `${icon} ${wall.volume.toFixed(2)}`;
                     if (ageSec > 5) label += ` (${ageSec}s)`;
 
                     ctx.font = 'bold 11px Inter';
                     ctx.fillStyle = '#fff';
-                    ctx.fillText(label, CHART_WIDTH - 120, y + 4);
+                    ctx.fillText(label, CHART_WIDTH - 130, y + 4);
                 });
 
                 // 11. PRICE AXIS & VOLUME PROFILE (Combined)
