@@ -1398,11 +1398,19 @@
         // WEBSOCKET
         // ============================================================================
         // ============================================================================
-        // BINANCE WEBSOCKET INTEGRATION (Direct Feed)
+        // BINANCE WEBSOCKET INTEGRATION (Auto-Rotate Mirrors - Anti Block)
         // ============================================================================
 
-        // Try Port 443 (Standard) instead of 9443 to reduce firewall issues
-        const BINANCE_STREAM_URL = 'wss://stream.binance.com:443/stream?streams=btcusdt@depth20@100ms/paxgusdt@depth20@100ms';
+        // List of available endpoints to try (Round-Robin) to bypass ISP block
+        const BINANCE_ENDPOINTS = [
+            'wss://data-stream.binance.com/stream', // AWS CloudFront (Often Unblocked)
+            'wss://stream.binance.com:443/stream',  // Standard SSL
+            'wss://stream.binance.com:9443/stream', // Default Port
+            'wss://fstream.binance.com/stream'      // Futures API Mirror
+        ];
+
+        let currentEndpointIdx = 0;
+        const STREAMS_PARAM = '?streams=btcusdt@depth20@100ms/paxgusdt@depth20@100ms';
 
         // Symbol Mapping
         const SYMBOL_MAP = {
@@ -1411,57 +1419,79 @@
         };
 
         function connectBinance() {
+            // Get current URL
+            const baseUrl = BINANCE_ENDPOINTS[currentEndpointIdx];
+            const finalUrl = baseUrl + STREAMS_PARAM;
+
             updateStatus('connecting');
-            console.log('Connecting to Binance:', BINANCE_STREAM_URL);
+            console.log(`[Binance] Connecting to Mirror ${currentEndpointIdx + 1}/${BINANCE_ENDPOINTS.length}: ${baseUrl}`);
+
+            // Show user which mirror is being tried
+            elements.statusText.textContent = `Trying Mirror ${currentEndpointIdx + 1}...`;
+            elements.statusText.style.color = '#fbbf24'; // Yellow
 
             try {
-                if (state.ws) state.ws.close();
-                state.ws = new WebSocket(BINANCE_STREAM_URL);
+                if (state.ws) {
+                    try { state.ws.close(); } catch (e) { }
+                }
+
+                state.ws = new WebSocket(finalUrl);
+
+                // CONNECTION TIMEOUT: If silent block (hangs), force rotate
+                const connectionTimeout = setTimeout(() => {
+                    if (state.ws.readyState !== WebSocket.OPEN) {
+                        console.warn("[Binance] Connection Timed Out -> Rotating");
+                        state.ws.close(); // Triggers onclose -> rotate
+                    }
+                }, 5000);
 
                 state.ws.onopen = () => {
+                    clearTimeout(connectionTimeout);
                     state.connected = true;
                     state.reconnectAttempts = 0;
                     updateStatus('connected');
-                    console.log("Binance WS Connected");
-                    // Clear error msg if any
+                    console.log("Binance WS Connected via " + baseUrl);
+
+                    elements.statusText.textContent = `Live (Mirror ${currentEndpointIdx + 1})`;
                     elements.statusText.style.color = '#22c55e';
                 };
 
                 state.ws.onclose = () => {
                     state.connected = false;
+                    clearTimeout(connectionTimeout);
                     updateStatus('disconnected');
+
+                    // Rotate to next endpoint
+                    currentEndpointIdx = (currentEndpointIdx + 1) % BINANCE_ENDPOINTS.length;
+                    console.log(`[Binance] Disconnected/Blocked. Rotating to: ${BINANCE_ENDPOINTS[currentEndpointIdx]}`);
+
                     scheduleReconnect();
                 };
 
                 state.ws.onerror = (e) => {
                     console.error('WebSocket error:', e);
-                    updateStatus('error');
-                    // Explicit hint for Indo users
-                    elements.statusText.textContent = 'Connection Blocked? TRY VPN / DNS 1.1.1.1';
-                    elements.statusText.style.color = '#ef4444';
+                    // Error will trigger onclose which handles rotation
                 };
 
                 state.ws.onmessage = (e) => {
                     const msg = JSON.parse(e.data);
-                    // Binance Combined Stream format: { stream: "...", data: {...} }
                     if (msg.stream) {
                         handleBinanceMessage(msg.stream, msg.data);
                     }
                 };
             } catch (e) {
                 console.error('Failed to create WebSocket:', e);
-                updateStatus('error');
+                // Try next immediately
+                currentEndpointIdx = (currentEndpointIdx + 1) % BINANCE_ENDPOINTS.length;
+                scheduleReconnect();
             }
         }
 
         function scheduleReconnect() {
-            if (state.reconnectAttempts >= CONFIG.maxReconnectAttempts) {
-                updateStatus('failed');
-                return;
-            }
-            state.reconnectAttempts++;
-            setTimeout(connectBinance, 2000);
+            // Fast retry when rotating
+            setTimeout(connectBinance, 1500);
         }
+        // Cleaned up residual code
 
         function handleBinanceMessage(streamName, data) {
             // streamName example: "btcusdt@depth20@100ms"
