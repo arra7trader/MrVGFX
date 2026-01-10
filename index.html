@@ -2125,7 +2125,13 @@
                 ctx.setLineDash([]);
 
                 // Future Bars
-                // Future Bars (Fixed - Min Visibility Enforced)
+                // Calculate Dynamic Bar Height (Dense Mode)
+                const tickSize = 1 / Math.pow(10, currentData.digits || 2);
+                const pxPerTick = (CHART_HEIGHT / Math.max(displaySpan, 0.0001)) * tickSize;
+                // Ensures bars overlap slightly (1.2x tick size) to look "Solid"
+                const barH = Math.max(4, Math.ceil(pxPerTick * 1.2));
+
+                // Future Bars (Fixed - Dynamic Density)
                 const drawFutureBar = (level, type) => {
                     const y = getY(level.price);
 
@@ -2146,7 +2152,8 @@
                         g.addColorStop(1, 'rgba(34, 197, 94, 0.4)');
                     }
                     ctx.fillStyle = g;
-                    ctx.fillRect(futureX, y - 2, barW, 4);
+                    // Draw centered based on dynamic height
+                    ctx.fillRect(futureX, y - (barH / 2), barW, barH);
                 };
                 currentData.asks.forEach(a => drawFutureBar(a, 'ASK'));
                 currentData.bids.forEach(b => drawFutureBar(b, 'BID'));
