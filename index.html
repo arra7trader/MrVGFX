@@ -1867,7 +1867,7 @@
                 let volMin = currentMid;
                 let volMax = currentMid;
                 const recentPoints = state.history.slice(-60);
-                
+
                 recentPoints.forEach(p => {
                     const price = p.orderBook.mid_price;
                     if (price > 0) {
@@ -1875,28 +1875,29 @@
                         if (price > volMax) volMax = price;
                     }
                 });
-                
+
                 let volatility = volMax - volMin;
-                
+
                 // B. Determine Zoom Range (Window Height)
                 const spread = (currentData.asks[0]?.price || currentMid) - (currentData.bids[0]?.price || currentMid);
                 const safeSpread = spread > 0 ? spread : currentMid * 0.0001;
-                
-                // Rule 1: Minimum Zoom = 20 Spreads (Prevent hyper-zoom on flat market)
-                const minZoom = safeSpread * 20;
-                
+
+                // Rule 1: Minimum Zoom = Hybrid (Max of 20 Spreads OR 0.05% of Price)
+                // This fixes BTC scaling where spread is tiny but price is huge.
+                const minZoom = Math.max(safeSpread * 20, currentMid * 0.0005);
+
                 // Rule 2: Adaptive Zoom = 1.5x Volatility (Fit recent action comfortably)
                 let targetRange = volatility * 1.5;
-                
+
                 // Rule 3: Apply Limits
                 if (targetRange < minZoom) targetRange = minZoom;
-                
+
                 // Rule 4: Maximum Zoom (Sanity check, e.g. 1% of price)
-                const maxZoom = currentMid * 0.01; 
+                const maxZoom = currentMid * 0.01;
                 if (targetRange > maxZoom) targetRange = maxZoom;
 
                 // State persistence for smooth zoom transition (optional, strictly jumping for now)
-                const fixedRange = targetRange; 
+                const fixedRange = targetRange;
 
                 // C. Initialize Camera if needed
                 if (!state.camera) {
@@ -1909,7 +1910,7 @@
                 // D. Sticky Camera / Deadzone Logic
                 let camMin = state.camera.min;
                 let camMax = state.camera.max;
-                
+
                 // Resize camera smoothly if range changed significantly (optional, simply recenter for now)
                 const currentCamRange = camMax - camMin;
                 if (Math.abs(currentCamRange - fixedRange) > fixedRange * 0.5) {
@@ -1939,7 +1940,7 @@
                     camMin += shift;
                     camMax += shift;
                 }
-                
+
                 // Update State
                 state.camera.min = camMin;
                 state.camera.max = camMax;
