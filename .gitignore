@@ -1,19 +1,12 @@
-# Python
 __pycache__/
-*.pyc
-*.pyo
-
-# Debug logs
+*.py[cod]
+*$py.class
+*.rar
+*.zip
+*.exe
+build/
+dist/
+RELEASE_CLIENT_*/
 bridge_debug_*.txt
 bridge_log.txt
-
-# IDE
 .vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Node
-node_modules/

@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import random
+import sys
 from datetime import datetime
 from typing import Dict, List, Set
 import httpx
@@ -29,20 +30,8 @@ TWELVEDATA_API_KEY = "demo"  # Free demo key, or get yours at twelvedata.com
 SYMBOLS = {
     # Metals - Using Binance PAXG for gold (tokenized gold, very accurate)
     "XAUUSD": {"source": "binance", "symbol": "PAXGUSDT", "digits": 2},
-    "XAGUSD": {"source": "fallback", "symbol": "silver", "digits": 3},  # No free silver API
-    # Forex (TwelveData)
-    "EURUSD": {"source": "twelvedata", "symbol": "EUR/USD", "digits": 5},
-    "GBPUSD": {"source": "twelvedata", "symbol": "GBP/USD", "digits": 5},
-    "USDJPY": {"source": "twelvedata", "symbol": "USD/JPY", "digits": 3},
-    "AUDUSD": {"source": "twelvedata", "symbol": "AUD/USD", "digits": 5},
-    "USDCAD": {"source": "twelvedata", "symbol": "USD/CAD", "digits": 5},
-    "NZDUSD": {"source": "twelvedata", "symbol": "NZD/USD", "digits": 5},
-    "USDCHF": {"source": "twelvedata", "symbol": "USD/CHF", "digits": 5},
     # Crypto (Binance - no API key needed)
     "BTCUSD": {"source": "binance", "symbol": "BTCUSDT", "digits": 2},
-    "ETHUSD": {"source": "binance", "symbol": "ETHUSDT", "digits": 2},
-    "SOLUSD": {"source": "binance", "symbol": "SOLUSDT", "digits": 2},
-    "XRPUSD": {"source": "binance", "symbol": "XRPUSDT", "digits": 4},
 }
 
 # ============ LOGGING ============
@@ -210,26 +199,26 @@ class PriceFetcher:
         
         # Calculate spread and level step
         if display_name in ["BTCUSD"]:
-            spread = mid_price * 0.0001
-            level_step = max(100.0, mid_price * 0.006)
+            spread = 0.10  # Tight spread for BTC
+            level_step = 5.0 # $5 steps (Realistic for high volume)
         elif display_name in ["ETHUSD"]:
-            spread = mid_price * 0.0001
-            level_step = max(5.0, mid_price * 0.006)
+            spread = 0.05
+            level_step = 1.0
         elif display_name in ["SOLUSD", "XRPUSD"]:
-            spread = mid_price * 0.0002
-            level_step = max(0.1, mid_price * 0.006)
+            spread = 0.01
+            level_step = 0.05
         elif display_name in ["XAUUSD"]:
-            spread = 0.30
-            level_step = max(5.0, mid_price * 0.006)
+            spread = 0.10  # 10 cents spread
+            level_step = 0.50 # 50 cents steps
         elif display_name in ["XAGUSD"]:
             spread = 0.02
-            level_step = max(0.05, mid_price * 0.006)
+            level_step = 0.05
         elif "JPY" in display_name:
-            spread = 0.02
-            level_step = max(0.1, mid_price * 0.006)
+            spread = 0.01
+            level_step = 0.05
         else:
-            spread = 0.00015
-            level_step = max(0.0005, mid_price * 0.006)
+            spread = 0.00010
+            level_step = 0.00020
         
         # Generate volume cache key
         if display_name not in self.volume_cache:
@@ -518,6 +507,9 @@ class WebSocketServer:
                             message = dom_data.copy()
                             message['type'] = 'DOM_DATA'
                             await ws.send(json.dumps(message))
+                            # print(f"Sent {symbol} update to client") # Uncomment for verbose debug
+                            sys.stdout.write(f"\r[DEBUG] Sending {symbol} data... Price: {dom_data['mid_price']}")
+                            sys.stdout.flush()
                     except Exception as e:
                         logger.error(f"Error sending to client: {e}")
                         

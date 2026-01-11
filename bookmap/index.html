@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MrVgFx | PRO BOOKMAP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #050505;
+            color: #cbd5e1;
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Floating Container matching React design */
+        #app-container {
+            position: relative;
+            width: 95vw;
+            height: 90vh;
+            background-color: #0f172a;
+            /* slate-900 */
+            border: 1px solid #1e293b;
+            /* slate-800 */
+            border-radius: 12px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Overlays */
+        .overlay {
+            position: absolute;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        /* Legend */
+        .legend-box {
+            top: 12px;
+            left: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .legend-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid #334155;
+            backdrop-filter: blur(4px);
+            font-size: 10px;
+            color: #cbd5e1;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app-container">
+        <!-- Legend Overlay -->
+        <div class="overlay legend-box">
+            <div class="legend-badge">
+                <div style="width: 10px; height: 10px; background: #2563eb; border-radius: 2px;"></div>
+                <span>Low Vol</span>
+            </div>
+            <div class="legend-badge">
+                <div style="width: 10px; height: 10px; background: #eab308; border-radius: 2px;"></div>
+                <span>High Vol</span>
+            </div>
+            <div class="legend-badge" style="color: white; font-weight: bold;">
+                <div
+                    style="width: 10px; height: 10px; background: white; box-shadow: 0 0 6px white; border-radius: 2px;">
+                </div>
+                <span>Whale Wall</span>
+            </div>
+        </div>
+
+        <!-- Symbol Buttons (Direct Clickable) -->
+        <div class="overlay"
+            style="top: 12px; right: 220px; pointer-events: auto; display: flex; gap: 8px; z-index: 100;">
+            <button onclick="changeSymbol('XAUUSD')"
+                style="background: #2563eb; color: white; border: 1px solid #3b82f6; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono'; cursor: pointer; transition: all 0.2s;">
+                XAUUSD
+            </button>
+            <button onclick="changeSymbol('BTCUSD')"
+                style="background: #0f172a; color: #94a3b8; border: 1px solid #334155; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono'; cursor: pointer; transition: all 0.2s;">
+                BTCUSD
+            </button>
+        </div>
+
+        <canvas id="heatmapCanvas"></canvas>
+    </div>
+
+    <script>
+        // ==========================================
+        // UTILS (Ported from HeatmapBubble.tsx)
+        // ==========================================
+
+        function classifyOrderSize(volume, avgVol) {
+            if (volume > avgVol * 10) return 'MEGA';
+            if (volume > avgVol * 5) return 'LARGE';
+            if (volume > avgVol * 2) return 'MEDIUM';
+            return 'SMALL';
+        }
+
+        function getSizeIcon(sizeClass) {
+            switch (sizeClass) {
+                case 'MEGA': return '🐋';
+                case 'LARGE': return '🦈';
+                case 'MEDIUM': return '📦';
+                default: return '';
+            }
+        }
+
+        // Turbo Colormap
+        function getHeatmapColor(intensity, alpha = 1) {
+            const t = Math.max(0, Math.min(1, intensity));
+            let r = 0, g = 0, b = 0;
+
+            if (t < 0.25) {
+                const p = t / 0.25;
+                r = 0; g = Math.floor(p * 255); b = Math.floor(150 + p * 105);
+            } else if (t < 0.5) {
+                const p = (t - 0.25) / 0.25;
+                r = 0; g = 255; b = Math.floor(255 * (1 - p));
+            } else if (t < 0.75) {
+                const p = (t - 0.5) / 0.25;
+                r = Math.floor(p * 255); g = 255; b = 0;
+            } else {
+                const p = (t - 0.75) / 0.25;
+                r = 255; g = Math.floor(255 * (1 - p)); b = 0;
+                if (t > 0.95) { r = 255; g = 255; b = 255; }
+            }
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function getVolumeStats(history, currentBook) {
+            let maxVol = 0;
+            let totalVol = 0;
+            let count = 0;
+
+            const processLevels = (levels) => {
+                levels.forEach(l => {
+                    maxVol = Math.max(maxVol, l.volume);
+                    totalVol += l.volume;
+                    count++;
+                });
+            };
+
+            if (currentBook) {
+                processLevels(currentBook.bids);
+                processLevels(currentBook.asks);
+            }
+
+            history.slice(-100).forEach(h => {
+                processLevels(h.orderBook.bids);
+                processLevels(h.orderBook.asks);
+            });
+
+            const avgVol = count > 0 ? totalVol / count : 1;
+            const ceiling = Math.min(maxVol, avgVol * 8); // Cap max to avoid single huge orders dimming everything
+            return { max: Math.max(ceiling, 0.0001), avg: avgVol };
+        }
+
+        function getPriceRange(history, currentBook) {
+            let minPrice = Infinity;
+            let maxPrice = -Infinity;
+
+            // 1. Check Current Book
+            if (currentBook) {
+                if (currentBook.bids.length > 0) minPrice = Math.min(minPrice, currentBook.bids[currentBook.bids.length - 1].price);
+                if (currentBook.asks.length > 0) maxPrice = Math.max(maxPrice, currentBook.asks[0].price);
+
+                // Scan all levels for safety
+                const all = [...currentBook.bids, ...currentBook.asks];
+                all.forEach(x => {
+                    if (x.price < minPrice) minPrice = x.price;
+                    if (x.price > maxPrice) maxPrice = x.price;
+                });
+            }
+
+            // 2. Check History (CRITICAL for movement)
+            // We scan the history to ensure the Y-axis covers the past path
+            history.forEach(h => {
+                // We use midPrice as a proxy for history range to save perf, 
+                // or we could scan h.orderBook.bids/asks if we want full heatmap containment.
+                // For "line movement", midPrice is enough, but for heatmap, we usually want full range.
+                // Let's use the range of the book at that time.
+                const book = h.orderBook;
+                if (book.bids.length > 0) minPrice = Math.min(minPrice, book.bids[book.bids.length - 1].price);
+                if (book.asks.length > 0) maxPrice = Math.max(maxPrice, book.asks[0].price);
+            });
+
+            // Fallback
+            if (minPrice === Infinity && currentBook) minPrice = currentBook.midPrice * 0.99;
+            if (maxPrice === -Infinity && currentBook) maxPrice = currentBook.midPrice * 1.01;
+            if (minPrice === Infinity) { minPrice = 0; maxPrice = 100; }
+
+            const span = maxPrice - minPrice;
+            // Pad 10% to keep it away from very edges
+            return { min: minPrice - span * 0.1, max: maxPrice + span * 0.1 };
+        }
+
+        function calculateVolumeProfile(history, currentBook, priceRange, numBuckets = 40) {
+            const buckets = new Array(numBuckets).fill(0);
+            const priceSpan = priceRange.max - priceRange.min;
+            const bucketSize = priceSpan / numBuckets;
+
+            const addToBucket = (price, volume) => {
+                const bucketIndex = Math.floor((price - priceRange.min) / bucketSize);
+                if (bucketIndex >= 0 && bucketIndex < numBuckets) {
+                    buckets[bucketIndex] += volume;
+                }
+            };
+
+            if (currentBook) {
+                currentBook.bids.forEach(b => addToBucket(b.price, b.volume));
+                currentBook.asks.forEach(a => addToBucket(a.price, a.volume));
+            }
+
+            history.slice(-50).forEach(h => {
+                h.orderBook.bids.forEach(b => addToBucket(b.price, b.volume * 0.5));
+                h.orderBook.asks.forEach(a => addToBucket(a.price, a.volume * 0.5));
+            });
+
+            const maxBucket = Math.max(...buckets, 1);
+            return { buckets, maxBucket, bucketSize };
+        }
+
+        // ==========================================
+        // STATE & LOGIC
+        // ==========================================
+        const state = {
+            currentSymbol: 'XAUUSD',
+            currentOrderBook: null,
+            history: [],
+            activeWalls: new Map(),
+            lastDraw: 0,
+            ws: null
+        };
+
+        const canvas = document.getElementById('heatmapCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const container = document.getElementById('app-container');
+
+        let width = 0;
+        let height = 0;
+
+        function resize() {
+            width = container.offsetWidth;
+            height = container.offsetHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // ==========================================
+        // SYMBOL SWITCHING
+        // ==========================================
+        function changeSymbol(newSymbol) {
+            if (newSymbol === state.currentSymbol) return;
+            console.log("Switching to", newSymbol);
+            state.currentSymbol = newSymbol;
+
+            // Visual Feedback: Update Button Styles
+            const btns = document.querySelectorAll('button');
+            btns.forEach(b => {
+                if (b.innerText.includes(newSymbol)) {
+                    // Active Blue
+                    b.style.background = '#2563eb';
+                    b.style.color = 'white';
+                    b.style.borderColor = '#3b82f6';
+                } else {
+                    // Inactive Dark
+                    b.style.background = '#0f172a';
+                    b.style.color = '#94a3b8';
+                    b.style.borderColor = '#334155';
+                }
+            });
+
+            // Reset Data
+            state.history = [];
+            state.activeWalls.clear();
+            state.currentOrderBook = null;
+
+            // Re-Subscribe if connected
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({ type: 'SUBSCRIBE', symbol: newSymbol }));
+            }
+        }
+
+        // ==========================================
+        // DRAW LOOP
+        // ==========================================
+        function draw() {
+            if (!state.currentOrderBook) {
+                requestAnimationFrame(draw);
+                return;
+            }
+
+            const currentBook = state.currentOrderBook;
+            const history = state.history;
+
+            // --- CONFIG ---
+            const PRICE_AXIS_WIDTH = 80;
+            const VOLUME_PROFILE_WIDTH = 100;
+            const RIGHT_MARGIN = VOLUME_PROFILE_WIDTH + PRICE_AXIS_WIDTH;
+            const FUTURE_WIDTH = 320;
+            const BOTTOM_MARGIN = 28;
+
+            const CHART_WIDTH = width - RIGHT_MARGIN;
+            const CHART_HEIGHT = height - BOTTOM_MARGIN;
+            const HISTORY_WIDTH = CHART_WIDTH - FUTURE_WIDTH;
+
+            // Stats
+            const { max: maxVol, avg: avgVol } = getVolumeStats(history, currentBook);
+            const priceRange = getPriceRange(history, currentBook);
+            const priceSpan = priceRange.max - priceRange.min;
+
+            const getY = (price) => CHART_HEIGHT - ((price - priceRange.min) / priceSpan) * CHART_HEIGHT;
+
+            // 1. BACKGROUND
+            ctx.fillStyle = '#0a0f1a';
+            ctx.fillRect(0, 0, width, height);
+
+            // Grid
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= 10; i++) {
+                const y = (CHART_HEIGHT / 10) * i;
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CHART_WIDTH, y); ctx.stroke();
+            }
+
+            // 2. HEATMAP HISTORY
+            // Draw last N snapshots that fit in HISTORY_WIDTH
+            // We map history indices to X coordinates
+            const pointsToDraw = history.slice(-Math.floor(HISTORY_WIDTH / 2)); // 2px per slice roughly
+            const pointWidth = Math.max(2, HISTORY_WIDTH / Math.max(pointsToDraw.length, 1));
+
+            pointsToDraw.forEach((point, i) => {
+                const x = i * pointWidth;
+
+                // Helper to draw varied thickness/alpha
+                const drawLevel = (level) => {
+                    const y = getY(level.price);
+                    const intensity = Math.min(1, level.volume / maxVol);
+
+                    // Dynamic Properties
+                    // Thickness: 1px (small) -> 4px (large)
+                    const thickness = 1 + (intensity * 3);
+
+                    // Alpha: 0.3 (faint) -> 1.0 (solid)
+                    const alpha = 0.3 + (intensity * 0.7);
+
+                    ctx.fillStyle = getHeatmapColor(intensity, alpha);
+
+                    // Draw centered
+                    ctx.fillRect(x, y - (thickness / 2), Math.ceil(pointWidth), thickness);
+                };
+
+                point.orderBook.asks.forEach(drawLevel);
+                point.orderBook.bids.forEach(drawLevel);
+            });
+
+            const historyEndX = pointsToDraw.length * pointWidth;
+            const currentY = getY(currentBook.midPrice);
+
+            // 3. PRICE LINE (White Glow)
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#3b82f6';
+            ctx.beginPath();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ffffff';
+            if (pointsToDraw.length > 0) {
+                ctx.moveTo(0, getY(pointsToDraw[0].orderBook.midPrice));
+                pointsToDraw.forEach((p, i) => {
+                    ctx.lineTo(i * pointWidth, getY(p.orderBook.midPrice));
+                });
+            }
+            ctx.lineTo(historyEndX, currentY);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // 4. FUTURE ZONE
+            const futureX = historyEndX;
+
+            // Separator
+            ctx.setLineDash([4, 6]); ctx.strokeStyle = '#475569'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(futureX, 0); ctx.lineTo(futureX, CHART_HEIGHT); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Label
+            ctx.fillStyle = '#64748b'; ctx.font = 'bold 10px Inter';
+            ctx.fillText('▶ FUTURE ORDERS', futureX + 10, 16);
+
+            // Dashed Price Projection
+            ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 1.5; ctx.setLineDash([8, 4]);
+            ctx.beginPath(); ctx.moveTo(futureX, currentY); ctx.lineTo(CHART_WIDTH, currentY); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw Future Bars (DOM)
+            const drawFutureBar = (price, volume, type) => {
+                const y = getY(price);
+                const intensity = volume / maxVol;
+                const barWidth = Math.min(FUTURE_WIDTH * intensity * 2, FUTURE_WIDTH - 20);
+                const colorStart = type === 'ASK' ? 'rgba(239, 68, 68, 0.7)' : 'rgba(34, 197, 94, 0.7)';
+
+                const grad = ctx.createLinearGradient(futureX, 0, futureX + barWidth, 0);
+                grad.addColorStop(0, colorStart); grad.addColorStop(1, 'transparent');
+
+                ctx.fillStyle = grad;
+                ctx.fillRect(futureX + 5, y - 2, barWidth, 4);
+            };
+
+            currentBook.asks.forEach(a => drawFutureBar(a.price, a.volume, 'ASK'));
+            currentBook.bids.forEach(b => drawFutureBar(b.price, b.volume, 'BID'));
+
+            // 5. WALL PERSISTENCE (Sticky Walls)
+            const whaleThreshold = Math.max(avgVol * 2, maxVol * 0.4);
+            const now = Date.now();
+
+            // Update tracking
+            const updateTracking = (price, volume, type) => {
+                if (volume < avgVol * 1.5) return;
+                const key = `${type}-${price.toFixed(2)}`;
+                const existing = state.activeWalls.get(key);
+                const sizeClass = classifyOrderSize(volume, avgVol);
+
+                if (existing) {
+                    existing.lastSeen = now;
+                    existing.volume = volume;
+                    existing.sizeClass = sizeClass;
+                } else {
+                    state.activeWalls.set(key, { price, volume, type, firstSeen: now, lastSeen: now, sizeClass });
+                }
+            };
+            currentBook.asks.forEach(a => updateTracking(a.price, a.volume, 'ASK'));
+            currentBook.bids.forEach(b => updateTracking(b.price, b.volume, 'BID'));
+
+            // Cleanup stale
+            state.activeWalls.forEach((wall, key) => {
+                if (now - wall.lastSeen > 3000) state.activeWalls.delete(key);
+            });
+
+            // Draw Sticky Walls
+            state.activeWalls.forEach(wall => {
+                if (wall.volume < whaleThreshold) return;
+
+                const ageMs = now - wall.firstSeen;
+                const ageSeconds = Math.floor(ageMs / 1000);
+                const y = getY(wall.price);
+                const baseColor = wall.type === 'ASK' ? '#ef4444' : '#22c55e';
+
+                // Persistence line logic
+                const opacity = Math.min(0.3 + (ageSeconds / 20) * 0.5, 0.8);
+                const color = wall.type === 'ASK' ? `rgba(239, 68, 68, ${opacity})` : `rgba(34, 197, 94, ${opacity})`;
+
+                // Highlight Zone
+                const zoneH = ageSeconds > 10 ? 20 : 12;
+                ctx.fillStyle = color;
+                ctx.fillRect(futureX, y - zoneH / 2, FUTURE_WIDTH, zoneH);
+
+                // Line
+                ctx.beginPath(); ctx.strokeStyle = baseColor; ctx.lineWidth = ageSeconds > 5 ? 3 : 2;
+                ctx.moveTo(futureX, y); ctx.lineTo(CHART_WIDTH, y); ctx.stroke();
+
+                // Label
+                const icon = getSizeIcon(wall.sizeClass);
+                const dir = wall.type === 'ASK' ? '🔴' : '🟢';
+                let label = `${dir}${icon} ${wall.volume.toFixed(2)}`;
+                if (ageSeconds > 5) label += ` (${ageSeconds}s)`;
+                if (ageSeconds >= 15) label += ' ✅';
+
+                ctx.font = 'bold 13px Inter';
+                const wT = ctx.measureText(label).width + 20;
+
+                // Box
+                ctx.fillStyle = '#0f172a';
+                ctx.strokeStyle = ageSeconds >= 15 ? '#fbbf24' : baseColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.roundRect(CHART_WIDTH - wT, y - 14, wT, 28, 6);
+                ctx.fill(); ctx.stroke();
+
+                // Text
+                ctx.fillStyle = ageSeconds >= 15 ? '#fbbf24' : baseColor;
+                ctx.fillText(label, CHART_WIDTH - wT + 10, y + 5);
+            });
+
+            // 6. VOLUME PROFILE (Right)
+            const vpX = CHART_WIDTH;
+            const volumeProfile = calculateVolumeProfile(history, currentBook, priceRange, 40);
+            const bucketH = CHART_HEIGHT / volumeProfile.buckets.length;
+
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(vpX, 0, VOLUME_PROFILE_WIDTH, CHART_HEIGHT);
+
+            volumeProfile.buckets.forEach((vol, i) => {
+                const bH = bucketH - 1;
+                const bW = (vol / volumeProfile.maxBucket) * (VOLUME_PROFILE_WIDTH - 20);
+                const y = CHART_HEIGHT - (i + 1) * bucketH;
+                const midP = priceRange.min + (i + 0.5) * volumeProfile.bucketSize;
+                const isBid = midP < currentBook.midPrice;
+
+                const grad = ctx.createLinearGradient(vpX + 15, 0, vpX + 15 + bW, 0);
+                if (isBid) { grad.addColorStop(0, 'rgba(34, 197, 94, 0.8)'); grad.addColorStop(1, 'rgba(34, 197, 94, 0.2)'); }
+                else { grad.addColorStop(0, 'rgba(239, 68, 68, 0.8)'); grad.addColorStop(1, 'rgba(239, 68, 68, 0.2)'); }
+
+                ctx.fillStyle = grad; ctx.fillRect(vpX + 15, y, bW, bH);
+            });
+
+            // 7. PRICE AXIS
+            const axX = CHART_WIDTH + VOLUME_PROFILE_WIDTH;
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(axX, 0, PRICE_AXIS_WIDTH, height);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '10px Inter';
+            for (let i = 0; i <= 10; i++) {
+                const p = priceRange.min + (priceSpan * i) / 10;
+                const y = getY(p);
+                ctx.fillText(p.toFixed(2), axX + 6, y + 3);
+            }
+            // Tag
+            ctx.fillStyle = '#3b82f6'; ctx.fillRect(axX, currentY - 10, PRICE_AXIS_WIDTH, 20);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter';
+            ctx.fillText(currentBook.midPrice.toFixed(2), axX + 6, currentY + 4);
+
+            requestAnimationFrame(draw);
+        }
+
+        // ==========================================
+        // CONNECT
+        // ==========================================
+        function connect() {
+            const ws = new WebSocket('ws://localhost:8776');
+            state.ws = ws;
+
+            ws.onopen = () => {
+                console.log("Connected to Bridge");
+                // Dynamic Subscribe
+                ws.send(JSON.stringify({ type: 'SUBSCRIBE', symbol: state.currentSymbol }));
+                draw(); // Start loop
+            };
+
+            ws.onmessage = (e) => {
+                try {
+                    const msg = JSON.parse(e.data);
+                    // Filter by current symbol
+                    if (msg.type === 'DOM_DATA' && msg.symbol === state.currentSymbol) {
+                        // Normalize to match React Props
+                        const orderBook = {
+                            symbol: msg.symbol,
+                            midPrice: msg.mid_price,
+                            bids: msg.bids,
+                            asks: msg.asks
+                        };
+
+                        state.currentOrderBook = orderBook;
+                        state.history.push({ timestamp: Date.now(), orderBook });
+                        if (state.history.length > 500) state.history.shift(); // Keep buffer
+                    }
+                } catch (err) { }
+            };
+            ws.onclose = () => setTimeout(connect, 2000);
+        }
+
+        connect();
+
+    </script>
+</body>
+
+</html>

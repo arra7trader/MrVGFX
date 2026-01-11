@@ -1,0 +1,64 @@
+========================================================================
+PANDUAN PENGGUNAAN - MRVGFX PRO SUITE
+========================================================================
+
+Selamat datang di software analisis market terdepan MrVgFx.
+Software ini memberikan data Level 2 (DOM) dan Order Flow secara real-time.
+
+------------------------------------------------------------------------
+⚠️  PENTING: CARA INSTALL YANG BENAR  ⚠️
+------------------------------------------------------------------------
+
+1. JANGAN jalankan file dari dalam ZIP/RAR.
+2. EKSTRAK folder ini ke Desktop atau Documents.
+   (Klik Kanan -> Extract All -> Pilih Folder)
+3. Buka folder hasil ekstrak.
+
+------------------------------------------------------------------------
+🚀 CARA MENJALANKAN
+------------------------------------------------------------------------
+
+1. Pastikan Anda sudah terhubung ke Internet.
+2. Klik 2x file:
+   
+   >>  START_CLIENT.bat  <<
+
+3. Tunggu sebentar, jendela hitam (Console) akan muncul.
+4. Browser akan terbuka otomatis menampilkan Dashboard.
+
+------------------------------------------------------------------------
+🔥 FITUR BARU: BOOKMAP / HEATMAP (FUTURES/CYBER MODE)
+------------------------------------------------------------------------
+
+Di Dashboard Utama, klik tombol "OPEN PRO BOOKMAP" di pojok kanan atas.
+Ini akan membuka jendela baru khusus untuk melihat "Whale Walls".
+
+Fitur Bookmap:
+- TOMBOL XAUUSD / BTCUSD: Pindah pair dengan cepat di pojok kanan atas.
+- GARIS PUTIH: Adalah harga saat ini.
+- BARIS WARNA-WARNI: Adalah tumpukan order (Limit Orders).
+  > MERAH = Order Jual (Resistance)
+  > HIJAU = Order Beli (Support)
+- KOTAK TEBAL: Menandakan "Big Player" atau Whale sedang pasang posisi.
+
+------------------------------------------------------------------------
+❓ TROUBLESHOOTING (SOLUSI MASALAH)
+------------------------------------------------------------------------
+
+A. "Tidak ada data / Chart diam saja"
+   - Cek internet Anda.
+   - Pastikan jendela hitam (Console) masih terbuka. Jangan ditutup!
+   - Tekan F5 di browser untuk refresh.
+
+B. "Tombol XAUUSD/BTCUSD tidak bisa diklik"
+   - Sudah diperbaiki di update terakhir.
+   - Coba refresh browser (Ctrl + R).
+
+C. "Muncul error ''Python not found''"
+   - Anda perlu install Python. Download di python.org (versi 3.12).
+   - Saat install, CENTANG opsi "Add Python to PATH".
+
+========================================================================
+Selamat Trading & Cuan!
+MrVgFx Team
+========================================================================

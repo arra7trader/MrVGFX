@@ -948,54 +948,6 @@
         .whale-alert.hidden {
             display: none;
         }
-
-        /* ============================================
-           SAFE BOOKMAP & VIEW TOGGLE STYLES
-           ============================================ */
-        .view-toggle {
-            display: flex;
-            background: var(--bg-card);
-            padding: 2px;
-            border-radius: 6px;
-            border: 1px solid var(--border-color);
-            margin-right: 12px;
-        }
-
-        .toggle-btn {
-            padding: 6px 12px;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            background: transparent;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .toggle-btn.active {
-            background: var(--accent);
-            color: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .heatmap-container {
-            /* Initially Hidden via Inline Style */
-            flex: 1;
-            background: #000;
-            position: relative;
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            display: none;
-            /* Explicitly hidden by default */
-        }
-
-        #heatmapCanvas {
-            width: 100%;
-            height: 100%;
-            image-rendering: pixelated;
-        }
     </style>
 </head>
 
@@ -1008,13 +960,6 @@
                 MrVgFx
             </div>
             <div class="header-right">
-                <!-- VIEW TOGGLE (MODULAR MODE) -->
-                <div class="view-toggle">
-                    <button class="toggle-btn active">DOM TABLE</button>
-                    <!-- Opens Separate App for Limitless Performance -->
-                    <button class="toggle-btn" onclick="window.open('bookmap/index.html', '_blank')">BOOKMAP ↗</button>
-                </div>
-
                 <div class="status">
                     <span class="status-dot" id="statusDot"></span>
                     <span id="statusText">Connecting...</span>
@@ -1119,8 +1064,6 @@
                         <span>Connecting to MT5...</span>
                     </div>
                 </div>
-
-                <!-- Heatmap Container REMOVED (Moved to /bookmap/index.html) -->
 
                 <!-- Signal Panel (sidebar right) -->
                 <div class="signal-panel" id="signalPanel" style="display: none;">
@@ -1279,7 +1222,6 @@
             reconnectAttempts: 0,
             symbols: [],
             currentSymbol: null,
-            currentView: 'dom', // 'dom' or 'heatmap'
             domData: {}
         };
 
@@ -1701,156 +1643,9 @@
         }
 
         // ============================================================================
-        // SAFE BOOKMAP IMPLEMENTATION (Isolated Logic)
+        // INIT
         // ============================================================================
-        const heatmap = {
-            canvas: document.getElementById('heatmapCanvas'),
-            ctx: null,
-            width: 0,
-            height: 0,
-            history: [],
-            initialized: false,
-            lastDraw: 0
-        };
-
-        function switchView(view) {
-            state.currentView = view;
-            const domBtn = document.getElementById('btnDom');
-            const mapBtn = document.getElementById('btnHeatmap');
-            const domDiv = document.getElementById('domContainer');
-            const mapDiv = document.getElementById('heatmapContainer');
-
-            // Toggle Buttons
-            domBtn.classList.toggle('active', view === 'dom');
-            mapBtn.classList.toggle('active', view === 'heatmap');
-
-            // Toggle Containers
-            if (view === 'dom') {
-                domDiv.style.display = 'flex';
-                mapDiv.style.display = 'none';
-            } else {
-                domDiv.style.display = 'none';
-                mapDiv.style.display = 'block';
-                // Initialize on first switch
-                if (!heatmap.initialized) initHeatmap();
-                resizeHeatmap();
-            }
-        }
-
-        function initHeatmap() {
-            try {
-                if (heatmap.initialized) return;
-                heatmap.canvas = document.getElementById('heatmapCanvas'); // Re-select to be sure
-                heatmap.ctx = heatmap.canvas.getContext('2d', { alpha: false });
-                heatmap.initialized = true;
-                resizeHeatmap();
-                window.addEventListener('resize', resizeHeatmap);
-            } catch (e) {
-                console.error("Heatmap Init Failed:", e);
-            }
-        }
-
-        function resizeHeatmap() {
-            try {
-                const container = document.getElementById('heatmapContainer');
-                if (container.offsetWidth === 0) return;
-
-                heatmap.canvas.width = container.offsetWidth;
-                heatmap.canvas.height = container.offsetHeight;
-                heatmap.width = heatmap.canvas.width;
-                heatmap.height = heatmap.canvas.height;
-            } catch (e) { }
-        }
-
-        function drawHeatmap(data) {
-            if (!heatmap.initialized) initHeatmap();
-
-            // Simple throttling
-            const now = Date.now();
-            if (now - heatmap.lastDraw < 30) return;
-            heatmap.lastDraw = now;
-
-            const ctx = heatmap.ctx;
-            const w = heatmap.width;
-            const h = heatmap.height;
-
-            // Normalize
-            const mid = data.mid_price;
-            const rangePercent = 0.005;
-            const pMin = mid * (1 - rangePercent);
-            const pMax = mid * (1 + rangePercent);
-
-            // Add Snap
-            heatmap.history.push({
-                bids: data.bids.filter(b => b.price >= pMin),
-                asks: data.asks.filter(a => a.price <= pMax),
-                mid: mid
-            });
-            if (heatmap.history.length > w) heatmap.history.shift();
-
-            // Clear
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, w, h);
-
-            // Draw History
-            const pxPerPrice = h / (pMax - pMin);
-            let localMaxVol = 5; // dynamic scaling base
-
-            for (let i = 0; i < heatmap.history.length; i++) {
-                const snap = heatmap.history[heatmap.history.length - 1 - i];
-                const x = w - 1 - i;
-                if (x < 0) break;
-
-                // Simple optimized drawing
-                snap.asks.forEach(a => {
-                    const y = h - ((a.price - pMin) * pxPerPrice);
-                    const intensity = Math.min(1, a.volume / 10);
-                    ctx.fillStyle = `rgba(239, 68, 68, ${intensity})`;
-                    ctx.fillRect(x, y, 1, 2);
-                });
-                snap.bids.forEach(b => {
-                    const y = h - ((b.price - pMin) * pxPerPrice);
-                    const intensity = Math.min(1, b.volume / 10);
-                    ctx.fillStyle = `rgba(34, 197, 94, ${intensity})`;
-                    ctx.fillRect(x, y, 1, 2);
-                });
-
-                // Best Lines
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(x, h - ((snap.mid - pMin) * pxPerPrice), 1, 1);
-            }
-
-            // Price Labels
-            ctx.fillStyle = '#888';
-            ctx.font = '10px monospace';
-            ctx.textAlign = 'right';
-            ctx.fillText(mid.toFixed(2), w - 5, h / 2);
-        }
-
-        // ============================================================================
-        // INIT APPLICATION (Local Bridge Mode)
-        // ============================================================================
-        function initApp() {
-            // Create Tabs Hardcoded for MrVgFx Bridge
-            elements.tabs.innerHTML = '';
-            const symbols = ['XAUUSD', 'BTCUSD'];
-
-            symbols.forEach((symbol, i) => {
-                const tab = document.createElement('button');
-                tab.className = 'tab' + (i === 0 ? ' active' : '');
-                tab.textContent = symbol;
-                tab.onclick = () => selectSymbol(symbol);
-                elements.tabs.appendChild(tab);
-            });
-
-            // Select Default
-            selectSymbol(symbols[0]);
-
-            // Connect to Localhost Bridge
-            connectWebSocket();
-        }
-
-        initApp();
+        connectWebSocket();
     </script>
 </body>
 
